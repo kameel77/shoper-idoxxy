@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shoper ↔ Idoxxy – Ustawienia</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background-color: #f5f7fa;
+        color: #1f2a44;
+      }
+      header {
+        background: linear-gradient(135deg, #1f4b99, #5b8def);
+        color: #fff;
+        padding: 32px 24px;
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      header p {
+        margin: 0;
+        max-width: 640px;
+        line-height: 1.5;
+      }
+      nav {
+        background: #0f1f3d;
+        color: #fff;
+      }
+      nav ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        gap: 16px;
+      }
+      nav a {
+        display: block;
+        padding: 14px 20px;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      nav a:hover,
+      nav a.active {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      main {
+        margin: 32px auto;
+        max-width: 960px;
+        padding: 0 16px 48px;
+        display: grid;
+        gap: 24px;
+      }
+      section {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 22px;
+      }
+      .placeholder {
+        color: #52606d;
+        font-size: 15px;
+        line-height: 1.6;
+      }
+      @media (max-width: 720px) {
+        header {
+          padding: 24px 16px;
+        }
+        nav ul {
+          flex-wrap: wrap;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Integracja Shoper ↔ Idoxxy</h1>
+      <p class="placeholder">
+        Wersja wstępna panelu konfiguracyjnego. Sekcje zostaną uzupełnione w
+        kolejnych iteracjach.
+      </p>
+    </header>
+    <nav>
+      <ul>
+        <li><a href="/">Start</a></li>
+        <li><a href="/settings" class="active">Panel ustawień</a></li>
+        <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
+        <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
+      </ul>
+    </nav>
+    <main>
+      <section>
+        <h2>Połączenie API</h2>
+        <p class="placeholder">
+          Formularz konfiguracji poświadczeń Idoxxy i test połączenia pojawi się
+          tutaj. Użytkownik zapisze `X-API-KEY`, `client_id`, `client_secret`
+          oraz adres API, a wtyczka zweryfikuje poprawność danych.
+        </p>
+      </section>
+
+      <section>
+        <h2>Synchronizacja zasobów</h2>
+        <p class="placeholder">
+          Po zapisaniu połączenia będzie można pobrać listę grup odbiorców oraz
+          dokumentów dostępnych w Idoxxy, aby przypisywać je do zdarzeń Shoper.
+        </p>
+      </section>
+
+      <section>
+        <h2>Mapowania zdarzeń Shoper</h2>
+        <p class="placeholder">
+          Kreator reguł mapujących rejestracje, zamówienia lub inne zdarzenia na
+          grupy Idoxxy zostanie dodany w kolejnych iteracjach. Reguły będą
+          obsługiwały priorytety i warunki filtrujące.
+        </p>
+      </section>
+
+      <section>
+        <h2>Logi i diagnostyka</h2>
+        <p class="placeholder">
+          W tym miejscu pojawi się log zdarzeń integracji, statusy wysyłek
+          dokumentów i narzędzia diagnostyczne do ręcznego retry.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

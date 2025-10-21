@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shoper ↔ Idoxxy – integracja</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background-color: #f5f7fa;
+        color: #1f2a44;
+      }
+      header {
+        background: linear-gradient(135deg, #1f4b99, #5b8def);
+        color: #fff;
+        padding: 32px 24px;
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      header p {
+        margin: 0;
+        max-width: 640px;
+        line-height: 1.5;
+      }
+      nav {
+        background: #0f1f3d;
+        color: #fff;
+      }
+      nav ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        gap: 16px;
+      }
+      nav a {
+        display: block;
+        padding: 14px 20px;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      nav a:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      main {
+        margin: 32px auto;
+        max-width: 960px;
+        padding: 0 16px;
+        display: grid;
+        gap: 24px;
+      }
+      section {
+        background: #fff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 22px;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      footer {
+        text-align: center;
+        padding: 24px;
+        color: #52606d;
+        font-size: 14px;
+      }
+      .cta {
+        display: inline-block;
+        margin-top: 16px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        text-decoration: none;
+        background: #1f4b99;
+        color: #fff;
+        font-weight: 600;
+      }
+      .cta:hover {
+        background: #163771;
+      }
+      @media (max-width: 720px) {
+        header {
+          padding: 24px 16px;
+        }
+        nav ul {
+          flex-wrap: wrap;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Integracja Shoper z Idoxxy</h1>
+      <p>
+        Wtyczka synchronizuje klientów, grupy i dokumenty trwałego nośnika
+        pomiędzy sklepem Shoper a platformą Idoxxy, gwarantując zgodność
+        prawną oraz pełny ślad doręczeń.
+      </p>
+    </header>
+    <nav>
+      <ul>
+        <li><a href="/">Start</a></li>
+        <li><a href="/settings">Panel ustawień</a></li>
+        <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
+        <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
+      </ul>
+    </nav>
+    <main>
+      <section>
+        <h2>Jak działa integracja?</h2>
+        <p>
+          Połączenie wykorzystuje OAuth2 oraz klucz API Idoxxy do bezpiecznej
+          komunikacji. Wtyczka pobiera z Idoxxy zdefiniowane grupy odbiorców i
+          dokumenty, a następnie pozwala mapować zdarzenia w Shoperze (np.
+          rejestrację konta, złożenie zamówienia) na odpowiednie grupy i
+          dokumenty trwałego nośnika.
+        </p>
+        <ul>
+          <li>Automatyczna rejestracja oraz aktualizacja klientów w Idoxxy.</li>
+          <li>Przypisywanie klientów do grup na podstawie reguł zdefiniowanych w panelu wtyczki.</li>
+          <li>Wysyłka dokumentów (regulaminy, OWU) w formie trwałego nośnika z dowodem doręczenia.</li>
+          <li>Podgląd logów i diagnostyka komunikacji z API Idoxxy.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Kroki konfiguracji</h2>
+        <ol>
+          <li>Uzyskaj `X-API-KEY`, `client_id` i `client_secret` z panelu Idoxxy.</li>
+          <li>
+            W wtyczce (zakładka <em>Połączenie API</em>) zapisz poświadczenia i
+            wykonaj test łączności.
+          </li>
+          <li>
+            Zsynchronizuj listę grup i dokumentów, aby były dostępne w mapowaniach.
+          </li>
+          <li>
+            Skonfiguruj reguły przypisujące zdarzenia Shoper do grup Idoxxy oraz
+            dokumentów.
+          </li>
+        </ol>
+        <a class="cta" href="/settings/ui">Przejdź do konfiguracji</a>
+      </section>
+
+      <section>
+        <h2>Co dalej?</h2>
+        <p>
+          Aktualna wersja udostępnia podstawowy panel i punkty końcowe API.
+          Kolejne iteracje dodadzą obsługę rzeczywistych webhooków Shoper,
+          zapisywanie konfiguracji w bazie oraz zaawansowane logowanie zdarzeń.
+        </p>
+      </section>
+    </main>
+    <footer>
+      © Shoper ↔ Idoxxy Integrator · Budujemy zgodność z wymogiem trwałego nośnika
+    </footer>
+  </body>
+</html>
