@@ -107,4 +107,36 @@ export class IdoxxyClient {
 
     return response.data;
   }
+
+  async getCustomerGroups(customerId: string) {
+    const query = new URLSearchParams({
+      searchQuery: customerId,
+      page: "0",
+      size: "1",
+    });
+
+    const response = await this.authorizedRequest<{
+      content: Array<{
+        id: string;
+        email?: string;
+        customerGroups: Array<{ id: string; groupName: string }>;
+      }>;
+    }>("get", `/groups/list-customers-with-groups?${query.toString()}`);
+
+    return (
+      response.data.content.find((customer) => customer.id === customerId) ??
+      response.data.content[0]
+    );
+  }
+
+  async assignCustomersToGroup(payload: {
+    groupId: string;
+    customerIds: string[];
+  }) {
+    const response = await this.authorizedRequest("put", `/groups/${payload.groupId}`, {
+      customerIds: payload.customerIds,
+    });
+
+    return response.data;
+  }
 }
