@@ -67,18 +67,13 @@ export class IdoxxyService {
   }
 
   async getCustomerGroups(customerId: string) {
-    const response = await this.client.listCustomersWithGroups({
-      search: customerId,
-      size: 200,
-    });
+    const customer = await this.client.getCustomerGroups(customerId);
 
-    const match = response.content.find((customer) => customer.id === customerId);
-
-    if (!match) {
+    if (!customer) {
       return null;
     }
 
-    return match.customerGroups ?? [];
+    return customer.customerGroups ?? [];
   }
 
   async assignCustomerToGroups(customerId: string, groupIds: string[]) {

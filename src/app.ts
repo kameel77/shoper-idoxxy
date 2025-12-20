@@ -6,6 +6,7 @@ import morgan from "morgan";
 
 import { idoxxyAdminRouter } from "./routes/idoxxyAdmin";
 import { settingsRouter } from "./routes/settings";
+import { customerGroupsRouter } from "./routes/customerGroups";
 
 export const createApp = () => {
   const app = express();
@@ -22,6 +23,7 @@ export const createApp = () => {
 
   app.use("/settings", settingsRouter);
   app.use("/admin/idoxxy", idoxxyAdminRouter);
+  app.use("/customers", customerGroupsRouter);
 
   return app;
 };

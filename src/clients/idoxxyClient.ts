@@ -428,4 +428,74 @@ export class IdoxxyClient {
       customerIds,
     });
   }
+
+  async listCustomersWithGroups(params?: {
+    search?: string;
+    page?: number;
+    size?: number;
+  }) {
+    const response = await this.authorizedRequest<PageResponse<CustomerWithGroups>>(
+      "get",
+      "/groups/list-customers-with-groups",
+      {
+        params: {
+          searchQuery: params?.search || undefined,
+          page: params?.page ?? 0,
+          size: params?.size ?? 100,
+        },
+      },
+    );
+
+    return response.data;
+  }
+
+  async getCustomerGroups(customerId: string) {
+    const response = await this.authorizedRequest<PageResponse<CustomerWithGroups>>(
+      "get",
+      "/groups/list-customers-with-groups",
+      {
+        params: {
+          searchQuery: customerId,
+          page: 0,
+          size: 1,
+        },
+      },
+    );
+
+    return (
+      response.data.content.find((customer) => customer.id === customerId) ??
+      response.data.content[0]
+    );
+  }
+
+  async addCustomersToGroup(groupId: string, customerIds: string[]) {
+    const response = await this.authorizedRequest<Record<string, unknown>>(
+      "put",
+      `/groups/${groupId}`,
+      {
+        data: {
+          customerIds,
+        },
+      },
+    );
+
+    return response.data;
+  }
+
+  async assignCustomersToGroup(payload: {
+    groupId: string;
+    customerIds: string[];
+  }) {
+    const response = await this.authorizedRequest<Record<string, unknown>>(
+      "put",
+      `/groups/${payload.groupId}`,
+      {
+        data: {
+          customerIds: payload.customerIds,
+        },
+      },
+    );
+
+    return response.data;
+  }
 }
