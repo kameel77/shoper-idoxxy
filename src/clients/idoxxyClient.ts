@@ -237,24 +237,49 @@ export class IdoxxyClient {
     return this.tokenCache.value;
   }
 
-  private async authorizedRequest<T>({
-    method,
-    url,
-    data,
-    params,
-  }: {
+  private async authorizedRequest<T>(
+    method: "get" | "post" | "put" | "delete",
+    url: string,
+    options?: { data?: unknown; params?: Record<string, unknown> },
+  );
+  private async authorizedRequest<T>(options: {
     method: "get" | "post" | "put" | "delete";
     url: string;
     data?: unknown;
     params?: Record<string, unknown>;
-  }) {
+  });
+  private async authorizedRequest<T>(
+    methodOrOptions:
+      | {
+          method: "get" | "post" | "put" | "delete";
+          url: string;
+          data?: unknown;
+          params?: Record<string, unknown>;
+        }
+      | "get"
+      | "post"
+      | "put"
+      | "delete",
+    url?: string,
+    options?: { data?: unknown; params?: Record<string, unknown> },
+  ) {
     const token = await this.getAccessToken();
 
+    const config =
+      typeof methodOrOptions === "string"
+        ? {
+            method: methodOrOptions,
+            url: url ?? "",
+            data: options?.data,
+            params: options?.params,
+          }
+        : methodOrOptions;
+
     return this.requestWithRetry<T>({
-      method,
-      url,
-      data,
-      params,
+      method: config.method,
+      url: config.url,
+      data: config.data,
+      params: config.params,
       headers: {
         Authorization: `Bearer ${token}`,
         "X-API-KEY": env.IDOXXY_API_KEY,
@@ -263,10 +288,24 @@ export class IdoxxyClient {
   }
 
   async getAccountDetails() {
-    const response = await this.authorizedRequest<Record<string, unknown>>(
+    const response = await this.authorizedRequest<Record<string, unknown>>({
+      method: "get",
+      url: "/details/me",
+    });
+
+    return response.data;
+  }
+
+  async listGroups(params?: { search?: string; page?: number; size?: number }) {
+    const response = await this.authorizedRequest<PageResponse<GroupToList>>(
+      "get",
+      "/groups/search",
       {
-        method: "get",
-        url: "/details/me",
+        params: {
+          groupName: params?.search || undefined,
+          page: params?.page ?? 0,
+          size: params?.size ?? 100,
+        },
       },
     );
 
@@ -279,13 +318,11 @@ export class IdoxxyClient {
     page?: number;
     size?: number;
   }) {
-    const response = await this.authorizedRequest<PageResponse<GroupToList>>({
-      method: "get",
-      url: "/groups/search",
-      params,
+    return this.listGroups({
+      search: params?.groupName,
+      page: params?.page,
+      size: params?.size,
     });
-
-    return response.data;
   }
 
   async createCustomer(payload: CustomerRegistrationRequest) {
@@ -327,24 +364,48 @@ export class IdoxxyClient {
     return response.data;
   }
 
-  async getCustomerGroups(customerId: string) {
+  async listCustomersWithGroups(params?: {
+    search?: string;
+    page?: number;
+    size?: number;
+  }) {
     const response = await this.authorizedRequest<PageResponse<CustomerWithGroups>>(
+      "get",
+      "/groups/list-customers-with-groups",
       {
-        method: "get",
-        url: "/groups/list-customers-with-groups",
         params: {
-          searchQuery: customerId,
-          page: 0,
-          size: 50,
+          searchQuery: params?.search || undefined,
+          page: params?.page ?? 0,
+          size: params?.size ?? 100,
         },
       },
     );
 
-    const customer = response.data.content.find(
-      (item) => item.id === customerId,
+    return response.data;
+  }
+
+  async getCustomerGroups(customerId: string) {
+    const response = await this.listCustomersWithGroups({
+      search: customerId,
+      size: 200,
+    });
+
+    const match = response.content.find((customer) => customer.id === customerId);
+    return match?.customerGroups ?? [];
+  }
+
+  async addCustomersToGroup(groupId: string, customerIds: string[]) {
+    const response = await this.authorizedRequest<Record<string, unknown>>(
+      "put",
+      `/groups/${groupId}`,
+      {
+        data: {
+          customerIds,
+        },
+      },
     );
 
-    return customer?.customerGroups ?? [];
+    return response.data;
   }
 
   async addCustomerToGroup(groupId: string, customerId: string) {

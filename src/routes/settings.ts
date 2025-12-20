@@ -12,33 +12,21 @@ const idoxxyService = new IdoxxyService();
 const shoperService = new ShoperService();
 
 const credentialsSchema = z.object({
-  apiKey: z.string().min(1),
-  clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
-  baseUrl: z.string().url(),
+  shoperApiKey: z.string().min(1).optional(),
+  idoxxyApiKey: z.string().min(1).optional(),
 });
 
 const defaultGroupsSchema = z.object({
-  registration: z.array(z.string().uuid()).default([]),
-  order: z.array(z.string().uuid()).default([]),
+  fallbackRegistrationGroupIds: z.array(z.string().uuid()).default([]),
+  fallbackOrderGroupIds: z.array(z.string().uuid()).default([]),
 });
 
-const mappingConditionSchema = z.object({
-  field: z.string().min(1),
-  operator: z.enum(["equals", "not_equals", "includes"]),
-  value: z.string(),
+const pathMappingSchema = z.object({
+  pathKey: z.string().min(1),
+  groupIds: z.array(z.string().uuid()).default([]),
 });
 
-const mappingSchema = z.object({
-  id: z.string().uuid().optional(),
-  name: z.string().min(1),
-  event: z.string().min(1),
-  priority: z.number().int().min(0).default(0),
-  enabled: z.boolean().default(true),
-  targetGroupIds: z.array(z.string().uuid()),
-  documentId: z.string().uuid().optional(),
-  conditions: z.array(mappingConditionSchema).default([]),
-});
+const pathMappingsSchema = z.array(pathMappingSchema).default([]);
 
 settingsRouter.get("/", (_req: Request, res: Response) => {
   res.sendFile(path.join(process.cwd(), "public/settings.html"));
@@ -81,7 +69,7 @@ settingsRouter.put("/credentials", (req: Request, res: Response) => {
     return res.status(400).json({ ok: false, errors: parsed.error.issues });
   }
 
-  settingsRepository.saveCredentials(parsed.data);
+  settingsRepository.updateApiKeys(parsed.data);
   return res.json({ ok: true });
 });
 
@@ -92,33 +80,17 @@ settingsRouter.put("/default-groups", (req: Request, res: Response) => {
     return res.status(400).json({ ok: false, errors: parsed.error.issues });
   }
 
-  settingsRepository.updateDefaultGroups(parsed.data);
+  settingsRepository.updateFallbackGroups(parsed.data);
   return res.json({ ok: true });
 });
 
-settingsRouter.post("/mappings", (req: Request, res: Response) => {
-  const parsed = mappingSchema.safeParse(req.body);
+settingsRouter.put("/path-mappings", (req: Request, res: Response) => {
+  const parsed = pathMappingsSchema.safeParse(req.body);
 
   if (!parsed.success) {
     return res.status(400).json({ ok: false, errors: parsed.error.issues });
   }
 
-  const { id, documentId, ...rest } = parsed.data;
-  const mapping = settingsRepository.upsertMapping({
-    ...rest,
-    ...(documentId ? { documentId } : {}),
-    ...(id ? { id } : {}),
-  });
-  return res.json({ ok: true, mapping });
-});
-
-settingsRouter.delete("/mappings/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  if (!id) {
-    return res.status(400).json({ ok: false, error: "Brak identyfikatora mapowania" });
-  }
-
-  settingsRepository.removeMapping(id);
+  settingsRepository.updatePathMappings(parsed.data);
   return res.json({ ok: true });
 });

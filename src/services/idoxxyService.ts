@@ -36,7 +36,7 @@ export class IdoxxyService {
   async assignGroups(customerId: string, groupIds: string[]) {
     await Promise.all(
       groupIds.map((groupId) =>
-        this.client.addCustomerToGroup(groupId, customerId),
+        this.client.addCustomersToGroup(groupId, [customerId]),
       ),
     );
   }
@@ -58,7 +58,38 @@ export class IdoxxyService {
     return this.client.getGroups(params);
   }
 
+  async listGroups(search?: string) {
+    return this.client.listGroups({ search });
+  }
+
+  async listCustomers(search?: string) {
+    return this.client.listCustomersWithGroups({ search });
+  }
+
   async getCustomerGroups(customerId: string) {
-    return this.client.getCustomerGroups(customerId);
+    const response = await this.client.listCustomersWithGroups({
+      search: customerId,
+      size: 200,
+    });
+
+    const match = response.content.find((customer) => customer.id === customerId);
+
+    if (!match) {
+      return null;
+    }
+
+    return match.customerGroups ?? [];
+  }
+
+  async assignCustomerToGroups(customerId: string, groupIds: string[]) {
+    await Promise.all(
+      groupIds.map((groupId) =>
+        this.client.addCustomersToGroup(groupId, [customerId]),
+      ),
+    );
+  }
+
+  async addCustomersToGroup(groupId: string, customerIds: string[]) {
+    await this.client.addCustomersToGroup(groupId, customerIds);
   }
 }
