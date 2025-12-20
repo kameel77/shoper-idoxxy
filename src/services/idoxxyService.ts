@@ -10,4 +10,55 @@ export class IdoxxyService {
       payload: data,
     };
   }
+
+  async ensureCustomerExists(payload: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  }) {
+    const existing = await this.client.listCustomers({
+      searchQuery: payload.email,
+      page: 0,
+      size: 20,
+    });
+
+    const matched = existing.content.find(
+      (customer) => customer.email.toLowerCase() === payload.email.toLowerCase(),
+    );
+
+    if (matched) {
+      return matched;
+    }
+
+    return this.client.createCustomer(payload);
+  }
+
+  async assignGroups(customerId: string, groupIds: string[]) {
+    await Promise.all(
+      groupIds.map((groupId) =>
+        this.client.addCustomerToGroup(groupId, customerId),
+      ),
+    );
+  }
+
+  async removeGroups(customerId: string, groupIds: string[]) {
+    await Promise.all(
+      groupIds.map((groupId) =>
+        this.client.removeCustomerFromGroup(groupId, customerId),
+      ),
+    );
+  }
+
+  async getGroups(params?: {
+    groupName?: string;
+    showDeferred?: boolean;
+    page?: number;
+    size?: number;
+  }) {
+    return this.client.getGroups(params);
+  }
+
+  async getCustomerGroups(customerId: string) {
+    return this.client.getCustomerGroups(customerId);
+  }
 }
