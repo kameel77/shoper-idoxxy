@@ -96,8 +96,7 @@ export class IdoxxyClient {
 
   constructor(httpInstance?: AxiosInstance, config: ClientConfig = {}) {
     const baseURL = config.baseUrl ?? env.IDOXXY_BASE_URL ?? "https://api.idoxxy.com";
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.apiKey = config.apiKey ?? (env as any).IDOXXY_API_KEY;
+    this.apiKey = config.apiKey ?? env.IDOXXY_API_KEY;
 
     this.http =
       httpInstance ??

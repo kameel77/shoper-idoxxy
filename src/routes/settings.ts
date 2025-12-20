@@ -31,7 +31,7 @@ const pathMappingsSchema = z.array(pathMappingSchema).default([]);
 const eventMappingSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1),
-  event: z.enum(["registration", "order", "newsletter", "abandoned_cart"]),
+  event: z.enum(["customer.created", "order.created", "newsletter", "abandoned_cart"]),
   priority: z.number().int().min(0).default(0),
   targetGroupIds: z.array(z.string()).default([]),
   documentId: z.string().optional(),
@@ -101,6 +101,7 @@ settingsRouter.put("/credentials", (req: Request, res: Response) => {
   }
 
   settingsRepository.updateApiKeys(parsed.data);
+  settingsRepository.updateLastSettingsModified();
   return res.json({ ok: true });
 });
 
@@ -112,6 +113,7 @@ settingsRouter.put("/default-groups", (req: Request, res: Response) => {
   }
 
   settingsRepository.updateFallbackGroups(parsed.data);
+  settingsRepository.updateLastSettingsModified();
   return res.json({ ok: true });
 });
 
@@ -134,16 +136,28 @@ settingsRouter.post("/mappings", (req: Request, res: Response) => {
   }
 
   const mapping = settingsRepository.upsertMapping(parsed.data as any);
+  settingsRepository.updateLastSettingsModified();
   return res.json({ ok: true, mapping });
 });
 
 settingsRouter.delete("/mappings/:id", (req: Request, res: Response) => {
   const { id } = req.params;
-  
+
   if (!id) {
     return res.status(400).json({ ok: false, error: "Missing mapping ID" });
   }
 
   settingsRepository.removeMapping(id);
+  settingsRepository.updateLastSettingsModified();
   return res.json({ ok: true });
+});
+
+settingsRouter.get("/sync-logs", (_req: Request, res: Response) => {
+  const logs = settingsRepository.getSyncLogs();
+  res.json({ items: logs });
+});
+
+settingsRouter.get("/sync-stats", (_req: Request, res: Response) => {
+  const stats = settingsRepository.getSyncStats();
+  res.json(stats);
 });

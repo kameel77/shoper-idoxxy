@@ -146,7 +146,7 @@ adminIdoxxyRouter.post("/settings/mappings", (req: Request, res: Response) => {
     ...rest,
     ...(documentId ? { documentId } : {}),
     ...(id ? { id } : {}),
-  } as any);
+  });
   return res.json({ ok: true, mapping });
 });
 

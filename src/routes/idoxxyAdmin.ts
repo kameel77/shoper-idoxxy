@@ -48,6 +48,7 @@ idoxxyAdminRouter.put("/settings", (req: Request, res: Response) => {
       order: parsed.data.fallbackOrderGroupIds,
     },
     mappings: [],
+    syncLogs: [],
   };
 
   settingsRepository.updateSettings(payload);

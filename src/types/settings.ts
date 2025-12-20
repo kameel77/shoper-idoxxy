@@ -10,7 +10,7 @@ export type EventMappingCondition = {
 };
 
 export type EventMapping = {
-  id: string;
+  id?: string;
   name: string;
   event: string;
   priority: number;
@@ -18,6 +18,27 @@ export type EventMapping = {
   targetGroupIds: string[];
   documentId?: string;
   conditions: EventMappingCondition[];
+};
+
+export type SyncLogEntry = {
+  id: string;
+  timestamp: number;
+  event: string;
+  source: "webhook" | "manual";
+  customerId?: string;
+  customerEmail?: string;
+  orderId?: string;
+  shoperCustomerId?: string;
+  action: string;
+  status: "success" | "error" | "partial";
+  details: {
+    groupsAssigned?: string[];
+    groupsRemoved?: string[];
+    mappingUsed?: string;
+    sourceUsed?: "mapping" | "fallback";
+    error?: string;
+  };
+  durationMs?: number;
 };
 
 export type SettingsSnapshot = {
@@ -36,4 +57,7 @@ export type SettingsSnapshot = {
     order: string[];
   };
   mappings: EventMapping[];
+  lastSyncedAt?: number;
+  lastSettingsModifiedAt?: number;
+  syncLogs: SyncLogEntry[];
 };

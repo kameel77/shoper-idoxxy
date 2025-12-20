@@ -1,4 +1,4 @@
-import type { PathMapping, SettingsSnapshot } from "../types/settings";
+import type { PathMapping, SettingsSnapshot, SyncLogEntry } from "../types/settings";
 import type { EventMapping } from "../types/settings";
 import { randomUUID } from "node:crypto";
 import { env } from "../config/env";
@@ -22,6 +22,12 @@ class SettingsRepository {
     registration: [],
     order: [],
   };
+
+  private lastSyncedAt: number | undefined;
+
+  private lastSettingsModifiedAt: number | undefined;
+
+  private syncLogs: SyncLogEntry[] = [];
 
   getSnapshot(): SettingsSnapshot {
     const credentials: { baseUrl?: string; apiKey?: string } = {};
@@ -48,7 +54,16 @@ class SettingsRepository {
         targetGroupIds: [...mapping.targetGroupIds],
         conditions: mapping.conditions.map((condition) => ({ ...condition })),
       })),
+      syncLogs: [...this.syncLogs],
     };
+
+    if (this.lastSyncedAt !== undefined) {
+      snapshot.lastSyncedAt = this.lastSyncedAt;
+    }
+
+    if (this.lastSettingsModifiedAt !== undefined) {
+      snapshot.lastSettingsModifiedAt = this.lastSettingsModifiedAt;
+    }
 
     if (this.shoperApiKey) {
       snapshot.shoperApiKey = this.shoperApiKey;
@@ -167,6 +182,48 @@ class SettingsRepository {
 
   removeMapping(id: string) {
     this.mappings = this.mappings.filter((mapping) => mapping.id !== id);
+  }
+
+  addSyncLog(logEntry: Omit<SyncLogEntry, "id" | "timestamp">) {
+    const newLog: SyncLogEntry = {
+      ...logEntry,
+      id: randomUUID(),
+      timestamp: Date.now(),
+    };
+
+    this.syncLogs.unshift(newLog); // Add to beginning for most recent first
+
+    // Keep only last 1000 logs to prevent memory issues
+    if (this.syncLogs.length > 1000) {
+      this.syncLogs = this.syncLogs.slice(0, 1000);
+    }
+
+    // Update last synced timestamp
+    this.lastSyncedAt = newLog.timestamp;
+  }
+
+  getSyncLogs(limit = 100, offset = 0) {
+    return this.syncLogs.slice(offset, offset + limit);
+  }
+
+  updateLastSettingsModified() {
+    this.lastSettingsModifiedAt = Date.now();
+  }
+
+  getSyncStats() {
+    const stats = {
+      total: this.syncLogs.length,
+      success: 0,
+      error: 0,
+      partial: 0,
+      lastSyncedAt: this.lastSyncedAt,
+    };
+
+    for (const log of this.syncLogs) {
+      stats[log.status]++;
+    }
+
+    return stats;
   }
 }
 

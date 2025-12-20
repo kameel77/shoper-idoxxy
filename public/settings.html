@@ -438,8 +438,8 @@
             </td>
             <td>
               <select name="event">
-                <option value="registration" ${mapping.event === "registration" ? "selected" : ""}>Rejestracja</option>
-                <option value="order" ${mapping.event === "order" ? "selected" : ""}>Zamówienie</option>
+                <option value="customer.created" ${mapping.event === "customer.created" ? "selected" : ""}>Rejestracja</option>
+                <option value="order.created" ${mapping.event === "order.created" ? "selected" : ""}>Zamówienie</option>
                 <option value="newsletter" ${mapping.event === "newsletter" ? "selected" : ""}>Newsletter</option>
                 <option value="abandoned_cart" ${mapping.event === "abandoned_cart" ? "selected" : ""}>Porzucony koszyk</option>
               </select>
@@ -531,7 +531,9 @@
 
           renderMappings(config.mappings || []);
 
-          if (config.lastSyncedAt) {
+          if (config.lastSettingsModifiedAt) {
+            lastSync.textContent = `Ostatnia zmiana ustawień: ${new Date(config.lastSettingsModifiedAt).toLocaleString("pl-PL")}`;
+          } else if (config.lastSyncedAt) {
             lastSync.textContent = `Ostatnia synchronizacja: ${new Date(config.lastSyncedAt).toLocaleString("pl-PL")}`;
           }
         } catch (error) {
@@ -556,6 +558,8 @@
           });
           setStatus("Poświadczenia zapisane.", "ok");
           setConnectionStatus(apiKeyValue ? "ok" : "unknown");
+          // Reload settings to show updated timestamp
+          await loadSettings();
         } catch (error) {
           setStatus("Nie udało się zapisać poświadczeń.", "error");
           setConnectionStatus("error");
@@ -587,6 +591,8 @@
             body: JSON.stringify(payload),
           });
           setStatus("Fallback groups zapisane.", "ok");
+          // Reload settings to show updated timestamp
+          await loadSettings();
         } catch (error) {
           setStatus("Nie udało się zapisać fallback groups.", "error");
         }
@@ -600,7 +606,7 @@
         const newMapping = {
           id: "",
           name: "",
-          event: "registration",
+          event: "customer.created",
           priority: existing.length,
           targetGroupIds: [],
           enabled: true,
@@ -625,6 +631,8 @@
             await requestJson(`/settings/mappings/${row.dataset.id}`, { method: "DELETE" });
             row.remove();
             setStatus("Mapowanie usunięte.", "ok");
+            // Reload settings to show updated timestamp
+            await loadSettings();
           } catch (error) {
             setStatus("Nie udało się usunąć mapowania.", "error");
           }
@@ -642,6 +650,8 @@
               row.dataset.id = response.mapping.id;
             }
             setStatus("Mapowanie zapisane.", "ok");
+            // Reload settings to show updated timestamp
+            await loadSettings();
           } catch (error) {
             setStatus("Nie udało się zapisać mapowania.", "error");
           }
@@ -668,6 +678,8 @@
             }),
           ]);
           setStatus("Zmiany zapisane.", "ok");
+          // Reload settings to show updated timestamp
+          await loadSettings();
         } catch (error) {
           setStatus("Nie udało się zapisać wszystkich zmian.", "error");
         }
