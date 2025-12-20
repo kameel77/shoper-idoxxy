@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shoper ↔ Idoxxy – Klienci</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background-color: #f5f7fa;
+        color: #1f2a44;
+      }
+      header {
+        background: linear-gradient(135deg, #1f4b99, #5b8def);
+        color: #fff;
+        padding: 32px 24px;
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      header p {
+        margin: 0;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      nav {
+        background: #0f1f3d;
+        color: #fff;
+      }
+      nav ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      nav a {
+        display: block;
+        padding: 14px 20px;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      nav a:hover,
+      nav a.active {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      main {
+        margin: 32px auto;
+        max-width: 1100px;
+        padding: 0 16px 56px;
+        display: grid;
+        gap: 24px;
+      }
+      section {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      input,
+      select {
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #d3d9e2;
+        font-size: 14px;
+      }
+      .search {
+        flex: 1;
+        min-width: 220px;
+      }
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #1f4b99;
+        color: #fff;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #1f2a44;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid #e2e8f0;
+        text-align: left;
+      }
+      th {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #52606d;
+      }
+      .status {
+        font-size: 13px;
+        color: #52606d;
+      }
+      .pagination {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .pagination button {
+        padding: 8px 12px;
+      }
+      .pill {
+        background: #eef2ff;
+        color: #4338ca;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .bulk-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .checkbox-cell {
+        width: 40px;
+      }
+      @media (max-width: 720px) {
+        header {
+          padding: 24px 16px;
+        }
+        table {
+          display: block;
+          overflow-x: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Klienci Idoxxy</h1>
+      <p>
+        Przeglądaj klientów zsynchronizowanych z Idoxxy. Użyj wyszukiwarki,
+        akcji zbiorczych oraz paginacji, aby szybko zarządzać dużymi listami.
+      </p>
+    </header>
+    <nav>
+      <ul>
+        <li><a href="/">Start</a></li>
+        <li><a href="/settings">Panel ustawień</a></li>
+        <li><a href="/customers.html" class="active">Klienci</a></li>
+        <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
+        <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
+      </ul>
+    </nav>
+    <main>
+      <section>
+        <div class="toolbar">
+          <input class="search" id="searchInput" type="search" placeholder="Szukaj po imieniu, emailu lub NIP" />
+          <select id="statusFilter">
+            <option value="">Wszystkie statusy</option>
+            <option value="active">Aktywni</option>
+            <option value="pending">W trakcie weryfikacji</option>
+            <option value="disabled">Wyłączeni</option>
+          </select>
+          <button class="primary" id="searchButton">Szukaj</button>
+        </div>
+      </section>
+
+      <section>
+        <div class="bulk-actions">
+          <span class="pill" id="selectedCount">Zaznaczono: 0</span>
+          <select id="bulkAction">
+            <option value="">Akcja zbiorcza</option>
+            <option value="assign-group">Dodaj do grupy</option>
+            <option value="remove-group">Usuń z grupy</option>
+            <option value="resend-documents">Wyślij ponownie dokumenty</option>
+          </select>
+          <select id="bulkGroup" disabled>
+            <option value="">Wybierz grupę</option>
+          </select>
+          <button class="secondary" id="applyBulk">Zastosuj</button>
+          <span class="status" id="bulkStatus"></span>
+        </div>
+      </section>
+
+      <section>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th class="checkbox-cell"><input type="checkbox" id="selectAll" /></th>
+                <th>Klient</th>
+                <th>Email</th>
+                <th>Grupy</th>
+                <th>Status</th>
+                <th>Ostatnia aktywność</th>
+              </tr>
+            </thead>
+            <tbody id="customersBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </section>
+    </main>
+    <script>
+      const apiBase = "/admin/idoxxy";
+      const customersBody = document.getElementById("customersBody");
+      const pagination = document.getElementById("pagination");
+      const searchInput = document.getElementById("searchInput");
+      const statusFilter = document.getElementById("statusFilter");
+      const selectedCount = document.getElementById("selectedCount");
+      const bulkAction = document.getElementById("bulkAction");
+      const bulkGroup = document.getElementById("bulkGroup");
+      const bulkStatus = document.getElementById("bulkStatus");
+      const selectAll = document.getElementById("selectAll");
+
+      let currentPage = 1;
+      let totalPages = 1;
+      let groupOptions = [];
+
+      const requestJson = async (path, options = {}) => {
+        const response = await fetch(`${apiBase}${path}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+          ...options,
+        });
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || `Błąd ${response.status}`);
+        }
+        if (response.status === 204) {
+          return null;
+        }
+        return response.json();
+      };
+
+      const updateSelectedCount = () => {
+        const count = customersBody.querySelectorAll("input[type='checkbox']:checked").length;
+        selectedCount.textContent = `Zaznaczono: ${count}`;
+      };
+
+      const renderCustomers = (items = []) => {
+        customersBody.innerHTML = "";
+        selectAll.checked = false;
+
+        if (!items.length) {
+          const row = document.createElement("tr");
+          row.innerHTML = `<td colspan="6" class="status">Brak klientów spełniających kryteria.</td>`;
+          customersBody.appendChild(row);
+          updateSelectedCount();
+          return;
+        }
+
+        items.forEach((customer) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td class="checkbox-cell"><input type="checkbox" data-id="${customer.id}" /></td>
+            <td><a href="/customer.html?id=${customer.id}">${customer.name}</a></td>
+            <td>${customer.email}</td>
+            <td>${(customer.groups || []).join(", ") || "-"}</td>
+            <td>${customer.status || "-"}</td>
+            <td>${customer.lastActivity ? new Date(customer.lastActivity).toLocaleString("pl-PL") : "-"}</td>
+          `;
+          customersBody.appendChild(row);
+        });
+        updateSelectedCount();
+      };
+
+      const renderPagination = () => {
+        pagination.innerHTML = "";
+        const prev = document.createElement("button");
+        prev.textContent = "Poprzednia";
+        prev.disabled = currentPage <= 1;
+        prev.addEventListener("click", () => loadCustomers(currentPage - 1));
+
+        const next = document.createElement("button");
+        next.textContent = "Następna";
+        next.disabled = currentPage >= totalPages;
+        next.addEventListener("click", () => loadCustomers(currentPage + 1));
+
+        const info = document.createElement("span");
+        info.className = "status";
+        info.textContent = `Strona ${currentPage} z ${totalPages}`;
+
+        pagination.append(prev, info, next);
+      };
+
+      const loadGroups = async () => {
+        try {
+          const response = await requestJson("/groups");
+          groupOptions = response.items || [];
+          bulkGroup.innerHTML = '<option value="">Wybierz grupę</option>';
+          groupOptions.forEach((group) => {
+            const option = document.createElement("option");
+            option.value = group.id;
+            option.textContent = group.name;
+            bulkGroup.appendChild(option);
+          });
+        } catch (error) {
+          bulkStatus.textContent = "Nie udało się pobrać grup.";
+        }
+      };
+
+      const loadCustomers = async (page = 1) => {
+        currentPage = page;
+        try {
+          const query = encodeURIComponent(searchInput.value.trim());
+          const status = encodeURIComponent(statusFilter.value);
+          const response = await requestJson(`/customers?query=${query}&status=${status}&page=${page}`);
+          renderCustomers(response.items || []);
+          totalPages = response.totalPages || 1;
+          renderPagination();
+        } catch (error) {
+          renderCustomers([]);
+          totalPages = 1;
+          renderPagination();
+        }
+      };
+
+      document.getElementById("searchButton").addEventListener("click", () => loadCustomers(1));
+      statusFilter.addEventListener("change", () => loadCustomers(1));
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          loadCustomers(1);
+        }
+      });
+
+      customersBody.addEventListener("change", (event) => {
+        if (event.target.type === "checkbox") {
+          updateSelectedCount();
+        }
+      });
+
+      selectAll.addEventListener("change", () => {
+        customersBody.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+          checkbox.checked = selectAll.checked;
+        });
+        updateSelectedCount();
+      });
+
+      bulkAction.addEventListener("change", () => {
+        const needsGroup = ["assign-group", "remove-group"].includes(bulkAction.value);
+        bulkGroup.disabled = !needsGroup;
+      });
+
+      document.getElementById("applyBulk").addEventListener("click", async () => {
+        const ids = Array.from(customersBody.querySelectorAll("input[type='checkbox']:checked")).map(
+          (checkbox) => checkbox.dataset.id
+        );
+        if (!ids.length) {
+          bulkStatus.textContent = "Wybierz klientów do akcji zbiorczej.";
+          return;
+        }
+        try {
+          const payload = {
+            action: bulkAction.value,
+            ids,
+            groupId: bulkGroup.value || undefined,
+          };
+          await requestJson("/customers/bulk", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          bulkStatus.textContent = "Akcja zbiorcza została wykonana.";
+          loadCustomers(currentPage);
+        } catch (error) {
+          bulkStatus.textContent = "Nie udało się wykonać akcji.";
+        }
+      });
+
+      loadGroups();
+      loadCustomers();
+    </script>
+  </body>
+</html>

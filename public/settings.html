@@ -25,7 +25,7 @@
       }
       header p {
         margin: 0;
-        max-width: 640px;
+        max-width: 720px;
         line-height: 1.5;
       }
       nav {
@@ -38,6 +38,7 @@
         list-style: none;
         display: flex;
         gap: 16px;
+        flex-wrap: wrap;
       }
       nav a {
         display: block;
@@ -52,8 +53,8 @@
       }
       main {
         margin: 32px auto;
-        max-width: 960px;
-        padding: 0 16px 48px;
+        max-width: 1100px;
+        padding: 0 16px 56px;
         display: grid;
         gap: 24px;
       }
@@ -67,17 +68,147 @@
         margin-top: 0;
         font-size: 22px;
       }
-      .placeholder {
+      h3 {
+        margin: 0 0 8px;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      .grid.columns-2 {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #d3d9e2;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      textarea {
+        min-height: 80px;
+        resize: vertical;
+      }
+      .help {
+        font-size: 13px;
         color: #52606d;
-        font-size: 15px;
-        line-height: 1.6;
+        margin-top: 6px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #1f4b99;
+        color: #fff;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #1f2a44;
+      }
+      button.ghost {
+        background: transparent;
+        color: #1f4b99;
+      }
+      button.danger {
+        background: #e11d48;
+        color: #fff;
+      }
+      .status {
+        font-size: 14px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+      }
+      .status.ok {
+        border-color: #86efac;
+        background: #ecfdf3;
+        color: #166534;
+      }
+      .status.error {
+        border-color: #fecdd3;
+        background: #fff1f2;
+        color: #9f1239;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid #e2e8f0;
+        vertical-align: top;
+        text-align: left;
+      }
+      th {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #52606d;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #eef2ff;
+        color: #4338ca;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .footer-actions {
+        position: sticky;
+        bottom: 0;
+        padding: 16px 0;
+        background: linear-gradient(180deg, rgba(245, 247, 250, 0) 0%, #f5f7fa 32%);
+      }
+      .mapping-row {
+        background: #f8fafc;
+      }
+      .inline-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .tag {
+        background: #e0f2fe;
+        color: #0c4a6e;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 12px;
       }
       @media (max-width: 720px) {
         header {
           padding: 24px 16px;
         }
-        nav ul {
-          flex-wrap: wrap;
+        table {
+          display: block;
+          overflow-x: auto;
         }
       }
     </style>
@@ -85,53 +216,441 @@
   <body>
     <header>
       <h1>Integracja Shoper ↔ Idoxxy</h1>
-      <p class="placeholder">
-        Wersja wstępna panelu konfiguracyjnego. Sekcje zostaną uzupełnione w
-        kolejnych iteracjach.
+      <p>
+        Skonfiguruj połączenie z Idoxxy, wybierz domyślne grupy oraz ustaw reguły
+        mapowania zdarzeń. Dane są zapisywane w panelu administracyjnym Shoper i
+        wykorzystywane do automatycznych synchronizacji.
       </p>
     </header>
     <nav>
       <ul>
         <li><a href="/">Start</a></li>
         <li><a href="/settings" class="active">Panel ustawień</a></li>
+        <li><a href="/customers.html">Klienci</a></li>
         <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
         <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
       </ul>
     </nav>
     <main>
       <section>
-        <h2>Połączenie API</h2>
-        <p class="placeholder">
-          Formularz konfiguracji poświadczeń Idoxxy i test połączenia pojawi się
-          tutaj. Użytkownik zapisze `X-API-KEY`, `client_id`, `client_secret`
-          oraz adres API, a wtyczka zweryfikuje poprawność danych.
-        </p>
+        <div class="grid columns-2">
+          <div>
+            <h2>Połączenie API</h2>
+            <p class="help">
+              Wprowadź dane OAuth2 oraz klucz API, które otrzymasz w panelu Idoxxy.
+              Po zapisaniu możesz przetestować połączenie.
+            </p>
+          </div>
+          <div class="status" id="connectionStatus">
+            Status połączenia: niezweryfikowany
+          </div>
+        </div>
+        <form id="credentialsForm" class="grid columns-2">
+          <div>
+            <label for="baseUrl">Adres API Idoxxy</label>
+            <input id="baseUrl" name="baseUrl" type="url" placeholder="https://api.idoxxy.com" required />
+          </div>
+          <div>
+            <label for="apiKey">X-API-KEY</label>
+            <input id="apiKey" name="apiKey" type="password" placeholder="••••••" required />
+          </div>
+          <div>
+            <label for="clientId">client_id</label>
+            <input id="clientId" name="clientId" type="text" placeholder="Wpisz client_id" required />
+          </div>
+          <div>
+            <label for="clientSecret">client_secret</label>
+            <input id="clientSecret" name="clientSecret" type="password" placeholder="Wpisz client_secret" required />
+          </div>
+        </form>
+        <div class="actions">
+          <button class="primary" id="saveCredentials">Zapisz poświadczenia</button>
+          <button class="secondary" id="testConnection">Testuj połączenie</button>
+        </div>
       </section>
 
       <section>
-        <h2>Synchronizacja zasobów</h2>
-        <p class="placeholder">
-          Po zapisaniu połączenia będzie można pobrać listę grup odbiorców oraz
-          dokumentów dostępnych w Idoxxy, aby przypisywać je do zdarzeń Shoper.
+        <h2>Fallback groups</h2>
+        <p class="help">
+          Domyślne grupy używane, gdy reguły mapowania nie zwrócą dopasowania.
         </p>
+        <div class="grid columns-2">
+          <div>
+            <label for="fallbackRegistration">Grupy dla rejestracji</label>
+            <select id="fallbackRegistration" name="fallbackRegistration" multiple size="6"></select>
+          </div>
+          <div>
+            <label for="fallbackOrder">Grupy dla zamówień</label>
+            <select id="fallbackOrder" name="fallbackOrder" multiple size="6"></select>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="saveFallback">Zapisz fallback groups</button>
+        </div>
       </section>
 
       <section>
-        <h2>Mapowania zdarzeń Shoper</h2>
-        <p class="placeholder">
-          Kreator reguł mapujących rejestracje, zamówienia lub inne zdarzenia na
-          grupy Idoxxy zostanie dodany w kolejnych iteracjach. Reguły będą
-          obsługiwały priorytety i warunki filtrujące.
-        </p>
+        <div class="grid columns-2">
+          <div>
+            <h2>Mapowania zdarzeń Shoper</h2>
+            <p class="help">
+              Zdefiniuj reguły przypisujące zdarzenia do grup Idoxxy i dokumentów.
+              Priorytety niższe są wykonywane jako pierwsze.
+            </p>
+          </div>
+          <div class="tag-list" id="mappingStats"></div>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="addMapping">Dodaj mapowanie</button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Nazwa reguły</th>
+                <th>Zdarzenie</th>
+                <th>Priorytet</th>
+                <th>Grupy docelowe</th>
+                <th>Dokument</th>
+                <th>Status</th>
+                <th>Akcje</th>
+              </tr>
+            </thead>
+            <tbody id="mappingsBody"></tbody>
+          </table>
+        </div>
       </section>
 
-      <section>
-        <h2>Logi i diagnostyka</h2>
-        <p class="placeholder">
-          W tym miejscu pojawi się log zdarzeń integracji, statusy wysyłek
-          dokumentów i narzędzia diagnostyczne do ręcznego retry.
-        </p>
+      <section class="footer-actions">
+        <div class="actions">
+          <button class="primary" id="saveAll">Zapisz wszystko</button>
+          <button class="secondary" id="cancelAll">Anuluj zmiany</button>
+          <span class="help" id="lastSync">Brak ostatniej synchronizacji</span>
+        </div>
       </section>
     </main>
+    <script>
+      const apiBase = "/admin/idoxxy";
+      const connectionStatus = document.getElementById("connectionStatus");
+      const credentialsForm = document.getElementById("credentialsForm");
+      const fallbackRegistration = document.getElementById("fallbackRegistration");
+      const fallbackOrder = document.getElementById("fallbackOrder");
+      const mappingsBody = document.getElementById("mappingsBody");
+      const mappingStats = document.getElementById("mappingStats");
+      const lastSync = document.getElementById("lastSync");
+
+      let cachedGroups = [];
+      let cachedDocuments = [];
+
+      const requestJson = async (path, options = {}) => {
+        const response = await fetch(`${apiBase}${path}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+          ...options,
+        });
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || `Błąd ${response.status}`);
+        }
+        if (response.status === 204) {
+          return null;
+        }
+        return response.json();
+      };
+
+      const setStatus = (message, type) => {
+        connectionStatus.textContent = message;
+        connectionStatus.className = `status ${type || ""}`;
+      };
+
+      const fillSelectOptions = (select, values, selected = []) => {
+        select.innerHTML = "";
+        values.forEach((group) => {
+          const option = document.createElement("option");
+          option.value = group.id;
+          option.textContent = group.name;
+          option.selected = selected.includes(group.id);
+          select.appendChild(option);
+        });
+      };
+
+      const selectedOptions = (select) =>
+        Array.from(select.selectedOptions).map((option) => option.value);
+
+      const renderMappingStats = (mappings) => {
+        mappingStats.innerHTML = "";
+        const active = mappings.filter((mapping) => mapping.enabled).length;
+        const disabled = mappings.length - active;
+        const total = document.createElement("span");
+        total.className = "pill";
+        total.textContent = `Łącznie: ${mappings.length}`;
+        const activePill = document.createElement("span");
+        activePill.className = "pill";
+        activePill.textContent = `Aktywne: ${active}`;
+        const disabledPill = document.createElement("span");
+        disabledPill.className = "pill";
+        disabledPill.textContent = `Wyłączone: ${disabled}`;
+        mappingStats.append(total, activePill, disabledPill);
+      };
+
+      const renderMappings = (mappings) => {
+        mappingsBody.innerHTML = "";
+        renderMappingStats(mappings);
+
+        if (!mappings.length) {
+          const emptyRow = document.createElement("tr");
+          emptyRow.innerHTML = `<td colspan="7" class="help">Brak mapowań. Dodaj pierwszą regułę.</td>`;
+          mappingsBody.appendChild(emptyRow);
+          return;
+        }
+
+        mappings.forEach((mapping) => {
+          const row = document.createElement("tr");
+          row.className = "mapping-row";
+          row.dataset.id = mapping.id || "";
+          row.innerHTML = `
+            <td>
+              <input type="text" name="name" value="${mapping.name || ""}" placeholder="np. Rejestracja B2B" />
+              <div class="help">${mapping.conditions?.length ? `Warunki: ${mapping.conditions.length}` : "Brak warunków"}</div>
+            </td>
+            <td>
+              <select name="event">
+                <option value="registration" ${mapping.event === "registration" ? "selected" : ""}>Rejestracja</option>
+                <option value="order" ${mapping.event === "order" ? "selected" : ""}>Zamówienie</option>
+                <option value="newsletter" ${mapping.event === "newsletter" ? "selected" : ""}>Newsletter</option>
+                <option value="abandoned_cart" ${mapping.event === "abandoned_cart" ? "selected" : ""}>Porzucony koszyk</option>
+              </select>
+            </td>
+            <td><input type="number" name="priority" value="${mapping.priority ?? 0}" min="0" /></td>
+            <td>
+              <select name="targetGroupIds" multiple size="4">
+                ${cachedGroups
+                  .map(
+                    (group) =>
+                      `<option value="${group.id}" ${mapping.targetGroupIds?.includes(group.id) ? "selected" : ""}>${group.name}</option>`
+                  )
+                  .join("")}
+              </select>
+            </td>
+            <td>
+              <select name="documentId">
+                <option value="">Brak</option>
+                ${cachedDocuments
+                  .map(
+                    (document) =>
+                      `<option value="${document.id}" ${mapping.documentId === document.id ? "selected" : ""}>${document.name}</option>`
+                  )
+                  .join("")}
+              </select>
+            </td>
+            <td>
+              <label><input type="checkbox" name="enabled" ${mapping.enabled ? "checked" : ""} /> aktywne</label>
+            </td>
+            <td>
+              <div class="inline-actions">
+                <button class="primary" data-action="save">Zapisz</button>
+                <button class="danger" data-action="delete">Usuń</button>
+              </div>
+            </td>
+          `;
+          mappingsBody.appendChild(row);
+        });
+      };
+
+      const gatherMappingData = (row) => {
+        const name = row.querySelector("input[name='name']").value.trim();
+        const event = row.querySelector("select[name='event']").value;
+        const priority = Number(row.querySelector("input[name='priority']").value || 0);
+        const targetGroupIds = Array.from(
+          row.querySelector("select[name='targetGroupIds']").selectedOptions
+        ).map((option) => option.value);
+        const documentId = row.querySelector("select[name='documentId']").value;
+        const enabled = row.querySelector("input[name='enabled']").checked;
+
+        return {
+          id: row.dataset.id || undefined,
+          name,
+          event,
+          priority,
+          targetGroupIds,
+          documentId: documentId || undefined,
+          enabled,
+          conditions: [],
+        };
+      };
+
+      const loadSettings = async () => {
+        try {
+          const [config, groups, documents] = await Promise.all([
+            requestJson("/settings/config"),
+            requestJson("/settings/groups"),
+            requestJson("/settings/documents"),
+          ]);
+          cachedGroups = groups.items || [];
+          cachedDocuments = documents.items || [];
+
+          if (config.credentials) {
+            credentialsForm.baseUrl.value = config.credentials.baseUrl || "";
+            credentialsForm.apiKey.value = config.credentials.apiKey || "";
+            credentialsForm.clientId.value = config.credentials.clientId || "";
+            credentialsForm.clientSecret.value = config.credentials.clientSecret || "";
+          }
+
+          fillSelectOptions(
+            fallbackRegistration,
+            cachedGroups,
+            config.defaultGroupIds?.registration || []
+          );
+          fillSelectOptions(
+            fallbackOrder,
+            cachedGroups,
+            config.defaultGroupIds?.order || []
+          );
+
+          renderMappings(config.mappings || []);
+
+          if (config.lastSyncedAt) {
+            lastSync.textContent = `Ostatnia synchronizacja: ${new Date(config.lastSyncedAt).toLocaleString("pl-PL")}`;
+          }
+        } catch (error) {
+          setStatus("Nie udało się pobrać danych konfiguracji.", "error");
+          renderMappings([]);
+        }
+      };
+
+      document.getElementById("saveCredentials").addEventListener("click", async () => {
+        try {
+          const payload = {
+            baseUrl: credentialsForm.baseUrl.value.trim(),
+            apiKey: credentialsForm.apiKey.value.trim(),
+            clientId: credentialsForm.clientId.value.trim(),
+            clientSecret: credentialsForm.clientSecret.value.trim(),
+          };
+          await requestJson("/settings/credentials", {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          });
+          setStatus("Poświadczenia zapisane.", "ok");
+        } catch (error) {
+          setStatus("Nie udało się zapisać poświadczeń.", "error");
+        }
+      });
+
+      document.getElementById("testConnection").addEventListener("click", async () => {
+        setStatus("Testowanie połączenia...", "");
+        try {
+          await requestJson("/settings/test-connection");
+          setStatus("Połączenie poprawne.", "ok");
+        } catch (error) {
+          setStatus("Błąd połączenia z API.", "error");
+        }
+      });
+
+      document.getElementById("saveFallback").addEventListener("click", async () => {
+        try {
+          const payload = {
+            registration: selectedOptions(fallbackRegistration),
+            order: selectedOptions(fallbackOrder),
+          };
+          await requestJson("/settings/default-groups", {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          });
+          setStatus("Fallback groups zapisane.", "ok");
+        } catch (error) {
+          setStatus("Nie udało się zapisać fallback groups.", "error");
+        }
+      });
+
+      document.getElementById("addMapping").addEventListener("click", () => {
+        const existing = Array.from(mappingsBody.querySelectorAll("tr")).filter(
+          (row) => row.dataset.id
+        );
+        const newMapping = {
+          id: "",
+          name: "",
+          event: "registration",
+          priority: existing.length,
+          targetGroupIds: [],
+          enabled: true,
+          conditions: [],
+        };
+        renderMappings([newMapping, ...existing.map((row) => gatherMappingData(row))]);
+      });
+
+      mappingsBody.addEventListener("click", async (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        const row = button.closest("tr");
+        const action = button.dataset.action;
+        if (!row || !action) return;
+
+        if (action === "delete") {
+          if (!row.dataset.id) {
+            row.remove();
+            return;
+          }
+          try {
+            await requestJson(`/settings/mappings/${row.dataset.id}`, { method: "DELETE" });
+            row.remove();
+            setStatus("Mapowanie usunięte.", "ok");
+          } catch (error) {
+            setStatus("Nie udało się usunąć mapowania.", "error");
+          }
+          return;
+        }
+
+        if (action === "save") {
+          try {
+            const payload = gatherMappingData(row);
+            const response = await requestJson("/settings/mappings", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
+            if (response.mapping?.id) {
+              row.dataset.id = response.mapping.id;
+            }
+            setStatus("Mapowanie zapisane.", "ok");
+          } catch (error) {
+            setStatus("Nie udało się zapisać mapowania.", "error");
+          }
+        }
+      });
+
+      document.getElementById("saveAll").addEventListener("click", async () => {
+        try {
+          await Promise.all([
+            requestJson("/settings/credentials", {
+              method: "PUT",
+              body: JSON.stringify({
+                baseUrl: credentialsForm.baseUrl.value.trim(),
+                apiKey: credentialsForm.apiKey.value.trim(),
+                clientId: credentialsForm.clientId.value.trim(),
+                clientSecret: credentialsForm.clientSecret.value.trim(),
+              }),
+            }),
+            requestJson("/settings/default-groups", {
+              method: "PUT",
+              body: JSON.stringify({
+                registration: selectedOptions(fallbackRegistration),
+                order: selectedOptions(fallbackOrder),
+              }),
+            }),
+          ]);
+          setStatus("Zmiany zapisane.", "ok");
+        } catch (error) {
+          setStatus("Nie udało się zapisać wszystkich zmian.", "error");
+        }
+      });
+
+      document.getElementById("cancelAll").addEventListener("click", () => {
+        loadSettings();
+        setStatus("Przywrócono dane z serwera.", "");
+      });
+
+      loadSettings();
+    </script>
   </body>
 </html>
