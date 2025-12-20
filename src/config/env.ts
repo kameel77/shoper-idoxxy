@@ -19,6 +19,7 @@ const envSchema = z.object({
     .default("https://example.shoper.pl/webapi/rest"),
   SHOPER_CLIENT_ID: z.string().optional(),
   SHOPER_CLIENT_SECRET: z.string().optional(),
+  SHOPER_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

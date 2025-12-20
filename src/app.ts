@@ -7,12 +7,19 @@ import morgan from "morgan";
 import { idoxxyAdminRouter } from "./routes/idoxxyAdmin";
 import { settingsRouter } from "./routes/settings";
 import { customerGroupsRouter } from "./routes/customerGroups";
+import { webhooksRouter } from "./routes/webhooks";
 
 export const createApp = () => {
   const app = express();
 
   app.use(helmet());
-  app.use(express.json());
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(express.urlencoded({ extended: true }));
   app.use(morgan("dev"));
   app.use(express.static(path.join(process.cwd(), "public")));
@@ -24,6 +31,7 @@ export const createApp = () => {
   app.use("/settings", settingsRouter);
   app.use("/admin/idoxxy", idoxxyAdminRouter);
   app.use("/customers", customerGroupsRouter);
+  app.use("/webhooks", webhooksRouter);
 
   return app;
 };

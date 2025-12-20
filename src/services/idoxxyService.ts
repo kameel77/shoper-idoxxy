@@ -1,5 +1,16 @@
 import { IdoxxyClient } from "../clients/idoxxyClient";
 
+type CustomerInput = {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+type EnsuredCustomer = {
+  id: string;
+  email: string;
+};
+
 export class IdoxxyService {
   constructor(private readonly client = new IdoxxyClient()) {}
 
@@ -11,26 +22,23 @@ export class IdoxxyService {
     };
   }
 
-  async ensureCustomerExists(payload: {
-    email: string;
-    firstName?: string;
-    lastName?: string;
-  }) {
+  async ensureCustomerExists(customer: CustomerInput): Promise<EnsuredCustomer> {
     const existing = await this.client.listCustomers({
-      searchQuery: payload.email,
+      searchQuery: customer.email,
       page: 0,
       size: 20,
     });
 
     const matched = existing.content.find(
-      (customer) => customer.email.toLowerCase() === payload.email.toLowerCase(),
+      (item) => item.email.toLowerCase() === customer.email.toLowerCase(),
     );
 
     if (matched) {
-      return matched;
+      return { id: matched.id, email: matched.email };
     }
 
-    return this.client.createCustomer(payload);
+    const created = await this.client.createCustomer(customer);
+    return { id: created.id, email: created.email };
   }
 
   async assignGroups(customerId: string, groupIds: string[]) {
@@ -87,4 +95,14 @@ export class IdoxxyService {
   async addCustomersToGroup(groupId: string, customerIds: string[]) {
     await this.client.addCustomersToGroup(groupId, customerIds);
   }
+
+  async addCustomerToGroups(customerId: string, groupIds: string[]) {
+    if (groupIds.length === 0) {
+      return { ok: true };
+    }
+
+    await this.assignCustomerToGroups(customerId, groupIds);
+    return { ok: true };
+  }
+}
 }
