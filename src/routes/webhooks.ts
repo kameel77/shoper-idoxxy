@@ -16,8 +16,8 @@ type MappingResolution = {
 
 type CustomerPayload = {
   email: string;
-  firstName?: string;
-  lastName?: string;
+  firstName?: string | undefined;
+  lastName?: string | undefined;
 };
 
 const idoxxyService = new IdoxxyService();
@@ -97,7 +97,7 @@ const mappingMatchesPayload = (mapping: EventMapping, payload: unknown) => {
     return true;
   }
 
-  return mapping.conditions.every((condition) => {
+  return mapping.conditions.every((condition: EventMapping["conditions"][number]) => {
     const value = resolvePayloadValue(payload, condition.field);
     return matchesCondition(value, condition);
   });
@@ -110,10 +110,12 @@ const resolveMappingGroups = (
 ): MappingResolution | null => {
   const snapshot = settingsRepository.getSnapshot();
   const mappings = snapshot.mappings
-    .filter((mapping) => mapping.enabled && mapping.event === eventKey)
-    .sort((a, b) => a.priority - b.priority);
+    .filter((mapping: EventMapping) => mapping.enabled && mapping.event === eventKey)
+    .sort((a: EventMapping, b: EventMapping) => a.priority - b.priority);
 
-  const mapping = mappings.find((candidate) => mappingMatchesPayload(candidate, payload));
+  const mapping = mappings.find((candidate: EventMapping) =>
+    mappingMatchesPayload(candidate, payload),
+  );
 
   if (mapping && mapping.targetGroupIds.length > 0) {
     return {

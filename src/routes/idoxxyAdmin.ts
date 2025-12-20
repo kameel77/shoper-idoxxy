@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
+import type { SettingsSnapshot } from "../types/settings";
 
 export const idoxxyAdminRouter = Router();
 const idoxxyService = new IdoxxyService();
@@ -40,7 +41,16 @@ idoxxyAdminRouter.put("/settings", (req: Request, res: Response) => {
     return res.status(400).json({ ok: false, errors: parsed.error.issues });
   }
 
-  settingsRepository.updateSettings(parsed.data);
+  const payload: SettingsSnapshot = {
+    ...parsed.data,
+    defaultGroupIds: {
+      registration: parsed.data.fallbackRegistrationGroupIds,
+      order: parsed.data.fallbackOrderGroupIds,
+    },
+    mappings: [],
+  };
+
+  settingsRepository.updateSettings(payload);
   return res.json({ ok: true });
 });
 
@@ -71,7 +81,7 @@ idoxxyAdminRouter.get(
   "/customers/:id/groups",
   async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const { id } = req.params as { id: string };
       const groups = await idoxxyService.getCustomerGroups(id);
       if (!groups) {
         return res
@@ -98,7 +108,7 @@ idoxxyAdminRouter.put(
     }
 
     try {
-      const { id } = req.params;
+      const { id } = req.params as { id: string };
       await idoxxyService.assignCustomerToGroups(id, parsed.data.groupIds);
       return res.json({ ok: true });
     } catch (error) {

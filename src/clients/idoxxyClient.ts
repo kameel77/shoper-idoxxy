@@ -2,6 +2,7 @@ import axios, {
   type AxiosError,
   type AxiosInstance,
   type AxiosRequestConfig,
+  type AxiosResponse,
 } from "axios";
 
 import { env } from "../config/env";
@@ -20,15 +21,15 @@ type CachedToken = {
 
 type CustomerRegistrationRequest = {
   email: string;
-  firstName?: string;
-  lastName?: string;
+  firstName?: string | undefined;
+  lastName?: string | undefined;
 };
 
 type Customer = {
   id: string;
   email: string;
-  firstName?: string;
-  lastName?: string;
+  firstName?: string | undefined;
+  lastName?: string | undefined;
 };
 
 type CustomerToList = {
@@ -79,16 +80,23 @@ type RequestMetadata = {
   startTime: number;
 };
 
+type ClientConfig = {
+  apiKey?: string;
+  baseUrl?: string;
+};
+
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 300;
 
 export class IdoxxyClient {
+  private readonly apiKey?: string;
   private readonly http: AxiosInstance;
 
   private tokenCache?: CachedToken;
 
-  constructor(httpInstance?: AxiosInstance) {
-    const baseURL = env.IDOXXY_BASE_URL ?? "https://api.idoxxy.com";
+  constructor(httpInstance?: AxiosInstance, config: ClientConfig = {}) {
+    const baseURL = config.baseUrl ?? env.IDOXXY_BASE_URL ?? "https://api.idoxxy.com";
+    this.apiKey = config.apiKey ?? env.IDOXXY_API_KEY;
 
     this.http =
       httpInstance ??
@@ -138,7 +146,7 @@ export class IdoxxyClient {
         return response;
       },
       (error: AxiosError) => {
-        const config = error.config ?? {};
+        const config = (error.config ?? {}) as AxiosRequestConfig;
         const metadata = (config as AxiosRequestConfig & { metadata?: RequestMetadata })
           .metadata;
         const durationMs = metadata ? Date.now() - metadata.startTime : undefined;
@@ -169,41 +177,23 @@ export class IdoxxyClient {
     return status >= 500 || status === 429;
   }
 
-  private async requestWithRetry<T>(
-    config: AxiosRequestConfig,
-    attempt = 1,
-  ) {
-    try {
-      return await this.http.request<T>(config);
-    } catch (error) {
-      if (
-        axios.isAxiosError(error) &&
-        this.shouldRetry(error) &&
-        attempt < MAX_RETRIES
-      ) {
-        const delayMs = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        await this.sleep(delayMs);
-        return this.requestWithRetry<T>(config, attempt + 1);
-      }
-
-      throw error;
-    }
-  }
-
   private ensureCredentials() {
-    if (!env.IDOXXY_CLIENT_ID || !env.IDOXXY_CLIENT_SECRET) {
-      throw new Error(
-        "Brak poświadczeń OAuth2 dla Idoxxy. Uzupełnij IDOXXY_CLIENT_ID i IDOXXY_CLIENT_SECRET.",
-      );
-    }
-
-    if (!env.IDOXXY_API_KEY) {
+    if (!this.apiKey) {
       throw new Error("Brak klucza API Idoxxy. Uzupełnij IDOXXY_API_KEY.");
     }
   }
 
   private async fetchToken(): Promise<CachedToken> {
     this.ensureCredentials();
+
+    const useOAuth = process.env.IDOXXY_USE_OAUTH === "true";
+    if (!useOAuth || !env.IDOXXY_CLIENT_ID || !env.IDOXXY_CLIENT_SECRET) {
+      const expiresAt = Date.now() + 60 * 60 * 1000;
+      return {
+        value: "",
+        expiresAt,
+      };
+    }
 
     const payload = new URLSearchParams({
       grant_type: "client_credentials",
@@ -238,51 +228,21 @@ export class IdoxxyClient {
   }
 
   private async authorizedRequest<T>(
-    method: "get" | "post" | "put" | "delete",
-    url: string,
-    options?: { data?: unknown; params?: Record<string, unknown> },
-  );
-  private async authorizedRequest<T>(options: {
-    method: "get" | "post" | "put" | "delete";
-    url: string;
-    data?: unknown;
-    params?: Record<string, unknown>;
-  });
-  private async authorizedRequest<T>(
-    methodOrOptions:
-      | {
-          method: "get" | "post" | "put" | "delete";
-          url: string;
-          data?: unknown;
-          params?: Record<string, unknown>;
-        }
-      | "get"
-      | "post"
-      | "put"
-      | "delete",
-    url?: string,
-    options?: { data?: unknown; params?: Record<string, unknown> },
-  ) {
+    config: AxiosRequestConfig & {
+      url: string;
+      method: "get" | "post" | "put" | "delete";
+      data?: unknown;
+      params?: Record<string, unknown>;
+    },
+  ): Promise<AxiosResponse<T>> {
     const token = await this.getAccessToken();
 
-    const config =
-      typeof methodOrOptions === "string"
-        ? {
-            method: methodOrOptions,
-            url: url ?? "",
-            data: options?.data,
-            params: options?.params,
-          }
-        : methodOrOptions;
-
     return this.requestWithRetry<T>({
-      method: config.method,
-      url: config.url,
-      data: config.data,
-      params: config.params,
+      ...config,
       headers: {
-        Authorization: `Bearer ${token}`,
-        "X-API-KEY": env.IDOXXY_API_KEY,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "X-API-KEY": this.apiKey,
+        ...(config.headers ?? {}),
       },
     });
   }
@@ -297,17 +257,16 @@ export class IdoxxyClient {
   }
 
   async listGroups(params?: { search?: string; page?: number; size?: number }) {
-    const response = await this.authorizedRequest<PageResponse<GroupToList>>(
-      "get",
-      "/groups/search",
-      {
-        params: {
-          groupName: params?.search || undefined,
-          page: params?.page ?? 0,
-          size: params?.size ?? 100,
-        },
-      },
-    );
+    const query: Record<string, unknown> = {};
+    if (params?.search !== undefined) query.groupName = params.search;
+    if (params?.page !== undefined) query.page = params.page;
+    if (params?.size !== undefined) query.size = params.size;
+
+    const response = await this.authorizedRequest<PageResponse<GroupToList>>({
+      method: "get",
+      url: "/groups/search",
+      ...(Object.keys(query).length ? { params: query } : {}),
+    });
 
     return response.data;
   }
@@ -318,11 +277,12 @@ export class IdoxxyClient {
     page?: number;
     size?: number;
   }) {
-    return this.listGroups({
-      search: params?.groupName,
-      page: params?.page,
-      size: params?.size,
-    });
+    const listParams: { search?: string; page?: number; size?: number } = {};
+    if (params?.groupName !== undefined) listParams.search = params.groupName;
+    if (params?.page !== undefined) listParams.page = params.page;
+    if (params?.size !== undefined) listParams.size = params.size;
+
+    return this.listGroups(Object.keys(listParams).length ? listParams : undefined);
   }
 
   async createCustomer(payload: CustomerRegistrationRequest) {
@@ -339,7 +299,7 @@ export class IdoxxyClient {
     const response = await this.authorizedRequest<PageResponse<CustomerToList>>({
       method: "get",
       url: "/customer/listAll",
-      params,
+      ...(params ? { params } : {}),
     });
 
     return response.data;
@@ -369,17 +329,16 @@ export class IdoxxyClient {
     page?: number;
     size?: number;
   }) {
-    const response = await this.authorizedRequest<PageResponse<CustomerWithGroups>>(
-      "get",
-      "/groups/list-customers-with-groups",
-      {
-        params: {
-          searchQuery: params?.search || undefined,
-          page: params?.page ?? 0,
-          size: params?.size ?? 100,
-        },
-      },
-    );
+    const query: Record<string, unknown> = {};
+    if (params?.search !== undefined) query.searchQuery = params.search;
+    if (params?.page !== undefined) query.page = params.page;
+    if (params?.size !== undefined) query.size = params.size;
+
+    const response = await this.authorizedRequest<PageResponse<CustomerWithGroups>>({
+      method: "get",
+      url: "/groups/list-customers-with-groups",
+      ...(Object.keys(query).length ? { params: query } : {}),
+    });
 
     return response.data;
   }
@@ -387,25 +346,24 @@ export class IdoxxyClient {
   async getCustomerGroups(customerId: string) {
     const response = await this.listCustomersWithGroups({
       search: customerId,
-      size: 200,
+      size: 1,
     });
 
-    const match = response.content.find((customer) => customer.id === customerId);
-    return match?.customerGroups ?? [];
+    return response.content.find((customer) => customer.id === customerId);
   }
 
   async addCustomersToGroup(groupId: string, customerIds: string[]) {
-    const response = await this.authorizedRequest<Record<string, unknown>>(
-      "put",
-      `/groups/${groupId}`,
-      {
-        data: {
-          customerIds,
-        },
-      },
-    );
+    const response = await this.authorizedRequest<Record<string, unknown>>({
+      method: "put",
+      url: `/groups/${groupId}`,
+      data: { customerIds },
+    });
 
     return response.data;
+  }
+
+  async assignCustomersToGroup(payload: { groupId: string; customerIds: string[] }) {
+    return this.addCustomersToGroup(payload.groupId, payload.customerIds);
   }
 
   async addCustomerToGroup(groupId: string, customerId: string) {
@@ -427,75 +385,5 @@ export class IdoxxyClient {
     return this.updateGroup(groupId, {
       customerIds,
     });
-  }
-
-  async listCustomersWithGroups(params?: {
-    search?: string;
-    page?: number;
-    size?: number;
-  }) {
-    const response = await this.authorizedRequest<PageResponse<CustomerWithGroups>>(
-      "get",
-      "/groups/list-customers-with-groups",
-      {
-        params: {
-          searchQuery: params?.search || undefined,
-          page: params?.page ?? 0,
-          size: params?.size ?? 100,
-        },
-      },
-    );
-
-    return response.data;
-  }
-
-  async getCustomerGroups(customerId: string) {
-    const response = await this.authorizedRequest<PageResponse<CustomerWithGroups>>(
-      "get",
-      "/groups/list-customers-with-groups",
-      {
-        params: {
-          searchQuery: customerId,
-          page: 0,
-          size: 1,
-        },
-      },
-    );
-
-    return (
-      response.data.content.find((customer) => customer.id === customerId) ??
-      response.data.content[0]
-    );
-  }
-
-  async addCustomersToGroup(groupId: string, customerIds: string[]) {
-    const response = await this.authorizedRequest<Record<string, unknown>>(
-      "put",
-      `/groups/${groupId}`,
-      {
-        data: {
-          customerIds,
-        },
-      },
-    );
-
-    return response.data;
-  }
-
-  async assignCustomersToGroup(payload: {
-    groupId: string;
-    customerIds: string[];
-  }) {
-    const response = await this.authorizedRequest<Record<string, unknown>>(
-      "put",
-      `/groups/${payload.groupId}`,
-      {
-        data: {
-          customerIds: payload.customerIds,
-        },
-      },
-    );
-
-    return response.data;
   }
 }

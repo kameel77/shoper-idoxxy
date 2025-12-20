@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <title>Shoper ↔ Idoxxy – Ustawienia</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
+  <style>
       :root {
         color-scheme: light;
         font-family: "Segoe UI", system-ui, sans-serif;
@@ -237,8 +237,8 @@
           <div>
             <h2>Połączenie API</h2>
             <p class="help">
-              Wprowadź dane OAuth2 oraz klucz API, które otrzymasz w panelu Idoxxy.
-              Po zapisaniu możesz przetestować połączenie.
+              Wprowadź klucz API, który otrzymasz w panelu Idoxxy. Po zapisaniu
+              możesz przetestować połączenie.
             </p>
           </div>
           <div class="status" id="connectionStatus">
@@ -248,24 +248,23 @@
         <form id="credentialsForm" class="grid columns-2">
           <div>
             <label for="baseUrl">Adres API Idoxxy</label>
-            <input id="baseUrl" name="baseUrl" type="url" placeholder="https://api.idoxxy.com" required />
+            <input
+              id="baseUrl"
+              name="baseUrl"
+              type="url"
+              placeholder="https://api.idoxxy.com"
+              value="https://api.idoxxy.com"
+              required
+            />
           </div>
           <div>
             <label for="apiKey">X-API-KEY</label>
             <input id="apiKey" name="apiKey" type="password" placeholder="••••••" required />
           </div>
-          <div>
-            <label for="clientId">client_id</label>
-            <input id="clientId" name="clientId" type="text" placeholder="Wpisz client_id" required />
-          </div>
-          <div>
-            <label for="clientSecret">client_secret</label>
-            <input id="clientSecret" name="clientSecret" type="password" placeholder="Wpisz client_secret" required />
-          </div>
         </form>
         <div class="actions">
-          <button class="primary" id="saveCredentials">Zapisz poświadczenia</button>
-          <button class="secondary" id="testConnection">Testuj połączenie</button>
+          <button type="button" class="primary" id="saveCredentials">Zapisz poświadczenia</button>
+          <button type="button" class="secondary" id="testConnection">Testuj połączenie</button>
         </div>
       </section>
 
@@ -285,7 +284,7 @@
           </div>
         </div>
         <div class="actions">
-          <button class="primary" id="saveFallback">Zapisz fallback groups</button>
+          <button type="button" class="primary" id="saveFallback">Zapisz fallback groups</button>
         </div>
       </section>
 
@@ -301,7 +300,7 @@
           <div class="tag-list" id="mappingStats"></div>
         </div>
         <div class="actions">
-          <button class="secondary" id="addMapping">Dodaj mapowanie</button>
+          <button type="button" class="secondary" id="addMapping">Dodaj mapowanie</button>
         </div>
         <div style="overflow-x: auto;">
           <table>
@@ -330,7 +329,7 @@
       </section>
     </main>
     <script>
-      const apiBase = "/admin/idoxxy";
+      const apiBase = "";
       const connectionStatus = document.getElementById("connectionStatus");
       const credentialsForm = document.getElementById("credentialsForm");
       const fallbackRegistration = document.getElementById("fallbackRegistration");
@@ -343,27 +342,56 @@
       let cachedDocuments = [];
 
       const requestJson = async (path, options = {}) => {
-        const response = await fetch(`${apiBase}${path}`, {
-          headers: {
-            "Content-Type": "application/json",
-            ...(options.headers || {}),
-          },
-          ...options,
-        });
-        if (!response.ok) {
-          const message = await response.text();
-          throw new Error(message || `Błąd ${response.status}`);
+        const url = `${apiBase}${path}`;
+        try {
+          console.info("[settings] fetch", { url, options });
+          const response = await fetch(url, {
+            headers: {
+              "Content-Type": "application/json",
+              ...(options.headers || {}),
+            },
+            ...options,
+          });
+          if (!response.ok) {
+            const message = await response.text();
+            throw new Error(message || `Błąd ${response.status}`);
+          }
+          if (response.status === 204) {
+            return null;
+          }
+          return response.json();
+        } catch (error) {
+          console.error("[settings] fetch error", error);
+          throw error;
         }
-        if (response.status === 204) {
-          return null;
-        }
-        return response.json();
       };
+
+      toggleApiKey.addEventListener("click", () => {
+        const input = credentialsForm.apiKey;
+        const isHidden = input.type === "password";
+        input.type = isHidden ? "text" : "password";
+        toggleApiKey.textContent = isHidden ? "🙈" : "👁";
+      });
 
       const setStatus = (message, type) => {
         connectionStatus.textContent = message;
         connectionStatus.className = `status ${type || ""}`;
       };
+      const setConnectionStatus = (state) => {
+        const statusTextMap = {
+          unknown: "Status połączenia: niezweryfikowany",
+          ok: "Status połączenia: zweryfikowany",
+          error: "Status połączenia: brak połączenia",
+        };
+        const classMap = {
+          unknown: "",
+          ok: "ok",
+          error: "error",
+        };
+        connectionStatus.textContent = statusTextMap[state] ?? statusTextMap.unknown;
+        connectionStatus.className = `status ${classMap[state] ?? ""}`;
+      };
+      setConnectionStatus("unknown");
 
       const fillSelectOptions = (select, values, selected = []) => {
         select.innerHTML = "";
@@ -449,10 +477,10 @@
               <label><input type="checkbox" name="enabled" ${mapping.enabled ? "checked" : ""} /> aktywne</label>
             </td>
             <td>
-              <div class="inline-actions">
-                <button class="primary" data-action="save">Zapisz</button>
-                <button class="danger" data-action="delete">Usuń</button>
-              </div>
+            <div class="inline-actions">
+              <button type="button" class="primary" data-action="save">Zapisz</button>
+              <button type="button" class="danger" data-action="delete">Usuń</button>
+            </div>
             </td>
           `;
           mappingsBody.appendChild(row);
@@ -492,10 +520,9 @@
           cachedDocuments = documents.items || [];
 
           if (config.credentials) {
-            credentialsForm.baseUrl.value = config.credentials.baseUrl || "";
+            credentialsForm.baseUrl.value = config.credentials.baseUrl || "https://api.idoxxy.com";
             credentialsForm.apiKey.value = config.credentials.apiKey || "";
-            credentialsForm.clientId.value = config.credentials.clientId || "";
-            credentialsForm.clientSecret.value = config.credentials.clientSecret || "";
+            setConnectionStatus(config.credentials.apiKey ? "ok" : "unknown");
           }
 
           fillSelectOptions(
@@ -520,35 +547,40 @@
         }
       };
 
-      document.getElementById("saveCredentials").addEventListener("click", async () => {
+      document.getElementById("saveCredentials").addEventListener("click", async (event) => {
+        event.preventDefault();
         try {
           const payload = {
             baseUrl: credentialsForm.baseUrl.value.trim(),
             apiKey: credentialsForm.apiKey.value.trim(),
-            clientId: credentialsForm.clientId.value.trim(),
-            clientSecret: credentialsForm.clientSecret.value.trim(),
           };
           await requestJson("/settings/credentials", {
             method: "PUT",
             body: JSON.stringify(payload),
           });
           setStatus("Poświadczenia zapisane.", "ok");
+          setConnectionStatus(payload.apiKey ? "ok" : "unknown");
         } catch (error) {
           setStatus("Nie udało się zapisać poświadczeń.", "error");
+          setConnectionStatus("error");
         }
       });
 
-      document.getElementById("testConnection").addEventListener("click", async () => {
+      document.getElementById("testConnection").addEventListener("click", async (event) => {
+        event.preventDefault();
         setStatus("Testowanie połączenia...", "");
         try {
           await requestJson("/settings/test-connection");
           setStatus("Połączenie poprawne.", "ok");
+          setConnectionStatus("ok");
         } catch (error) {
           setStatus("Błąd połączenia z API.", "error");
+          setConnectionStatus("error");
         }
       });
 
-      document.getElementById("saveFallback").addEventListener("click", async () => {
+      document.getElementById("saveFallback").addEventListener("click", async (event) => {
+        event.preventDefault();
         try {
           const payload = {
             registration: selectedOptions(fallbackRegistration),
@@ -564,7 +596,8 @@
         }
       });
 
-      document.getElementById("addMapping").addEventListener("click", () => {
+      document.getElementById("addMapping").addEventListener("click", (event) => {
+        event.preventDefault();
         const existing = Array.from(mappingsBody.querySelectorAll("tr")).filter(
           (row) => row.dataset.id
         );
@@ -627,8 +660,6 @@
               body: JSON.stringify({
                 baseUrl: credentialsForm.baseUrl.value.trim(),
                 apiKey: credentialsForm.apiKey.value.trim(),
-                clientId: credentialsForm.clientId.value.trim(),
-                clientSecret: credentialsForm.clientSecret.value.trim(),
               }),
             }),
             requestJson("/settings/default-groups", {

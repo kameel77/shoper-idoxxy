@@ -12,8 +12,8 @@ const idoxxyService = new IdoxxyService();
 const shoperService = new ShoperService();
 
 const credentialsSchema = z.object({
-  shoperApiKey: z.string().min(1).optional(),
-  idoxxyApiKey: z.string().min(1).optional(),
+  baseUrl: z.string().url().default("https://api.idoxxy.com"),
+  apiKey: z.string().min(1).optional(),
 });
 
 const defaultGroupsSchema = z.object({

@@ -1,3 +1,5 @@
+/// <reference path="./types/express.d.ts" />
+
 import path from "node:path";
 
 import express, { type Request, type Response } from "express";
@@ -16,7 +18,7 @@ export const createApp = () => {
   app.use(
     express.json({
       verify: (req, _res, buf) => {
-        req.rawBody = buf;
+        (req as Request & { rawBody?: Buffer }).rawBody = buf;
       },
     }),
   );
