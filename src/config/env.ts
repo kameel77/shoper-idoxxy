@@ -11,6 +11,7 @@ const envSchema = z.object({
   IDOXXY_CLIENT_ID: z.string().optional(),
   IDOXXY_CLIENT_SECRET: z.string().optional(),
   IDOXXY_BASE_URL: z.string().url().default("https://api.idoxxy.com"),
+  SHOPER_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
