@@ -1,4 +1,5 @@
 import { IdoxxyClient } from "../clients/idoxxyClient";
+import { settingsRepository } from "../repositories/settingsRepository";
 
 type CustomerInput = {
   email: string;
@@ -16,10 +17,10 @@ export class IdoxxyService {
 
   private getClient() {
     const creds = settingsRepository.getIdoxxyCredentials();
-    return new IdoxxyClient(undefined, {
-      apiKey: creds.apiKey,
-      baseUrl: creds.baseUrl,
-    });
+    const config: { baseUrl?: string; apiKey?: string } = {};
+    if (creds.baseUrl) config.baseUrl = creds.baseUrl;
+    if (creds.apiKey) config.apiKey = creds.apiKey;
+    return new IdoxxyClient(undefined, config);
   }
 
   async healthCheck() {

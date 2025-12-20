@@ -89,14 +89,15 @@ const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 300;
 
 export class IdoxxyClient {
-  private readonly apiKey?: string;
+  private readonly apiKey: string | undefined;
   private readonly http: AxiosInstance;
 
   private tokenCache?: CachedToken;
 
   constructor(httpInstance?: AxiosInstance, config: ClientConfig = {}) {
     const baseURL = config.baseUrl ?? env.IDOXXY_BASE_URL ?? "https://api.idoxxy.com";
-    this.apiKey = config.apiKey ?? env.IDOXXY_API_KEY;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.apiKey = config.apiKey ?? (env as any).IDOXXY_API_KEY;
 
     this.http =
       httpInstance ??
@@ -175,6 +176,33 @@ export class IdoxxyClient {
 
     const status = error.response.status;
     return status >= 500 || status === 429;
+  }
+
+  private async requestWithRetry<T>(
+    config: AxiosRequestConfig,
+  ): Promise<AxiosResponse<T>> {
+    let lastError: AxiosError | undefined;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        return await this.http.request<T>(config);
+      } catch (error) {
+        if (!(error instanceof Error) || !axios.isAxiosError(error)) {
+          throw error;
+        }
+
+        lastError = error;
+
+        if (!this.shouldRetry(error) || attempt === MAX_RETRIES - 1) {
+          throw error;
+        }
+
+        const delayMs = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+        await this.sleep(delayMs);
+      }
+    }
+
+    throw lastError;
   }
 
   private ensureCredentials() {

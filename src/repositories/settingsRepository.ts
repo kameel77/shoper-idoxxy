@@ -91,7 +91,12 @@ class SettingsRepository {
     idoxxyApiKey?: string | undefined;
   }) {
     this.baseUrl = payload.baseUrl || this.baseUrl;
-    this.idoxxyApiKey = payload.apiKey ?? payload.idoxxyApiKey ?? this.idoxxyApiKey;
+    if (payload.apiKey !== undefined) {
+      this.idoxxyApiKey = payload.apiKey || undefined;
+    } else if (payload.idoxxyApiKey !== undefined) {
+      this.idoxxyApiKey = payload.idoxxyApiKey;
+    }
+    // If neither apiKey nor idoxxyApiKey is provided, keep existing value
     this.shoperApiKey = payload.shoperApiKey ?? this.shoperApiKey;
   }
 

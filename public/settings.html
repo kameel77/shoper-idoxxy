@@ -366,13 +366,6 @@
         }
       };
 
-      toggleApiKey.addEventListener("click", () => {
-        const input = credentialsForm.apiKey;
-        const isHidden = input.type === "password";
-        input.type = isHidden ? "text" : "password";
-        toggleApiKey.textContent = isHidden ? "🙈" : "👁";
-      });
-
       const setStatus = (message, type) => {
         connectionStatus.textContent = message;
         connectionStatus.className = `status ${type || ""}`;
@@ -550,16 +543,19 @@
       document.getElementById("saveCredentials").addEventListener("click", async (event) => {
         event.preventDefault();
         try {
+          const apiKeyValue = credentialsForm.apiKey.value.trim();
           const payload = {
             baseUrl: credentialsForm.baseUrl.value.trim(),
-            apiKey: credentialsForm.apiKey.value.trim(),
           };
+          if (apiKeyValue) {
+            payload.apiKey = apiKeyValue;
+          }
           await requestJson("/settings/credentials", {
             method: "PUT",
             body: JSON.stringify(payload),
           });
           setStatus("Poświadczenia zapisane.", "ok");
-          setConnectionStatus(payload.apiKey ? "ok" : "unknown");
+          setConnectionStatus(apiKeyValue ? "ok" : "unknown");
         } catch (error) {
           setStatus("Nie udało się zapisać poświadczeń.", "error");
           setConnectionStatus("error");
@@ -654,12 +650,13 @@
 
       document.getElementById("saveAll").addEventListener("click", async () => {
         try {
+          const apiKeyValue = credentialsForm.apiKey.value.trim();
           await Promise.all([
             requestJson("/settings/credentials", {
               method: "PUT",
               body: JSON.stringify({
                 baseUrl: credentialsForm.baseUrl.value.trim(),
-                apiKey: credentialsForm.apiKey.value.trim(),
+                apiKey: apiKeyValue || "",
               }),
             }),
             requestJson("/settings/default-groups", {
