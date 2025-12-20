@@ -84,14 +84,15 @@ export class IdoxxyClient {
   private async authorizedRequest<T>(
     method: "get" | "post" | "put" | "delete",
     url: string,
-    data?: unknown,
+    options?: { data?: unknown; params?: Record<string, unknown> },
   ) {
     const token = await this.getAccessToken();
 
     return this.http.request<T>({
       method,
       url,
-      data,
+      data: options?.data,
+      params: options?.params,
       headers: {
         Authorization: `Bearer ${token}`,
         "X-API-KEY": env.IDOXXY_API_KEY,
@@ -103,6 +104,56 @@ export class IdoxxyClient {
     const response = await this.authorizedRequest<Record<string, unknown>>(
       "get",
       "/details/me",
+    );
+
+    return response.data;
+  }
+
+  async listGroups(params?: { search?: string; page?: number; size?: number }) {
+    const response = await this.authorizedRequest<Record<string, unknown>>(
+      "get",
+      "/groups/search",
+      {
+        params: {
+          groupName: params?.search || undefined,
+          page: params?.page ?? 0,
+          size: params?.size ?? 100,
+        },
+      },
+    );
+
+    return response.data;
+  }
+
+  async listCustomersWithGroups(params?: {
+    search?: string;
+    page?: number;
+    size?: number;
+  }) {
+    const response = await this.authorizedRequest<Record<string, unknown>>(
+      "get",
+      "/groups/list-customers-with-groups",
+      {
+        params: {
+          searchQuery: params?.search || undefined,
+          page: params?.page ?? 0,
+          size: params?.size ?? 100,
+        },
+      },
+    );
+
+    return response.data;
+  }
+
+  async addCustomersToGroup(groupId: string, customerIds: string[]) {
+    const response = await this.authorizedRequest<Record<string, unknown>>(
+      "put",
+      `/groups/${groupId}`,
+      {
+        data: {
+          customerIds,
+        },
+      },
     );
 
     return response.data;

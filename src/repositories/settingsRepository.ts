@@ -1,83 +1,70 @@
-import { randomUUID } from "node:crypto";
-
-import type {
-  ApiCredentials,
-  EventMapping,
-  SettingsSnapshot,
-} from "../types/settings";
+import type { PathMapping, SettingsSnapshot } from "../types/settings";
 
 class SettingsRepository {
-  private credentials?: ApiCredentials;
+  private shoperApiKey?: string;
 
-  private defaultGroupIds = {
-    registration: [] as string[],
-    order: [] as string[],
-  };
+  private idoxxyApiKey?: string;
 
-  private mappings = new Map<string, EventMapping>();
+  private fallbackRegistrationGroupIds: string[] = [];
 
-  private lastSyncedAt?: string;
+  private fallbackOrderGroupIds: string[] = [];
+
+  private pathMappings: PathMapping[] = [];
 
   getSnapshot(): SettingsSnapshot {
     const snapshot: SettingsSnapshot = {
-      defaultGroupIds: {
-        registration: [...this.defaultGroupIds.registration],
-        order: [...this.defaultGroupIds.order],
-      },
-      mappings: Array.from(this.mappings.values())
-        .map((mapping) => ({
-          ...mapping,
-          targetGroupIds: [...mapping.targetGroupIds],
-          conditions: mapping.conditions.map((condition) => ({ ...condition })),
-        }))
-        .sort((a, b) => a.priority - b.priority),
+      fallbackRegistrationGroupIds: [...this.fallbackRegistrationGroupIds],
+      fallbackOrderGroupIds: [...this.fallbackOrderGroupIds],
+      pathMappings: this.pathMappings.map((mapping) => ({
+        pathKey: mapping.pathKey,
+        groupIds: [...mapping.groupIds],
+      })),
     };
 
-    if (this.credentials) {
-      snapshot.credentials = { ...this.credentials };
+    if (this.shoperApiKey) {
+      snapshot.shoperApiKey = this.shoperApiKey;
     }
 
-    if (this.lastSyncedAt) {
-      snapshot.lastSyncedAt = this.lastSyncedAt;
+    if (this.idoxxyApiKey) {
+      snapshot.idoxxyApiKey = this.idoxxyApiKey;
     }
 
     return snapshot;
   }
 
-  saveCredentials(credentials: ApiCredentials) {
-    this.credentials = credentials;
+  updateSettings(payload: SettingsSnapshot) {
+    this.shoperApiKey = payload.shoperApiKey;
+    this.idoxxyApiKey = payload.idoxxyApiKey;
+    this.fallbackRegistrationGroupIds = [
+      ...payload.fallbackRegistrationGroupIds,
+    ];
+    this.fallbackOrderGroupIds = [...payload.fallbackOrderGroupIds];
+    this.pathMappings = payload.pathMappings.map((mapping) => ({
+      pathKey: mapping.pathKey,
+      groupIds: [...mapping.groupIds],
+    }));
   }
 
-  updateDefaultGroups(payload: { registration: string[]; order: string[] }) {
-    this.defaultGroupIds = {
-      registration: [...payload.registration],
-      order: [...payload.order],
-    };
+  updateApiKeys(payload: { shoperApiKey?: string; idoxxyApiKey?: string }) {
+    this.shoperApiKey = payload.shoperApiKey;
+    this.idoxxyApiKey = payload.idoxxyApiKey;
   }
 
-  upsertMapping(mapping: Omit<EventMapping, "id"> & { id?: string }) {
-    const identifier = mapping.id ?? randomUUID();
-    const normalized: EventMapping = {
-      ...mapping,
-      id: identifier,
-      targetGroupIds: [...mapping.targetGroupIds],
-      conditions: mapping.conditions.map((condition) => ({ ...condition })),
-    };
-
-    if (!normalized.documentId) {
-      delete normalized.documentId;
-    }
-
-    this.mappings.set(identifier, normalized);
-    return normalized;
+  updateFallbackGroups(payload: {
+    fallbackRegistrationGroupIds: string[];
+    fallbackOrderGroupIds: string[];
+  }) {
+    this.fallbackRegistrationGroupIds = [
+      ...payload.fallbackRegistrationGroupIds,
+    ];
+    this.fallbackOrderGroupIds = [...payload.fallbackOrderGroupIds];
   }
 
-  removeMapping(id: string) {
-    this.mappings.delete(id);
-  }
-
-  markSynced(timestamp: string = new Date().toISOString()) {
-    this.lastSyncedAt = timestamp;
+  updatePathMappings(pathMappings: PathMapping[]) {
+    this.pathMappings = pathMappings.map((mapping) => ({
+      pathKey: mapping.pathKey,
+      groupIds: [...mapping.groupIds],
+    }));
   }
 }
 
