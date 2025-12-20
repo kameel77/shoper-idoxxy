@@ -41,6 +41,9 @@ IDOXXY_API_KEY=...
 IDOXXY_CLIENT_ID=...
 IDOXXY_CLIENT_SECRET=...
 IDOXXY_BASE_URL=https://api.idoxxy.com
+SHOPER_CLIENT_ID=...
+SHOPER_CLIENT_SECRET=...
+SHOPER_BASE_URL=https://twoj-sklep.shoper.pl/webapi/rest
 ```
 
 Bez podanych wartości endpoint testowy zwróci błąd informujący o brakujących poświadczeniach.
@@ -52,6 +55,7 @@ Bez podanych wartości endpoint testowy zwróci błąd informujący o brakujący
 | GET    | `/`                         | Strona startowa (statyczny opis integracji). |
 | GET    | `/settings`                 | Panel konfiguracji (placeholder). |
 | GET    | `/settings/test-connection` | Test połączenia z Idoxxy (`/details/me`). |
+| GET    | `/settings/test-shoper`     | Test połączenia z Shoper (`GET /webapi/rest/shops`). |
 | GET    | `/settings/config`          | Zrzut aktualnych ustawień (in-memory). |
 | PUT    | `/settings/credentials`     | Zapis poświadczeń API. |
 | PUT    | `/settings/default-groups`  | Aktualizacja domyślnych grup. |

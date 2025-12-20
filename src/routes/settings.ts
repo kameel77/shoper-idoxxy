@@ -5,9 +5,11 @@ import { z } from "zod";
 
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
+import { ShoperService } from "../services/shoperService";
 
 export const settingsRouter = Router();
 const idoxxyService = new IdoxxyService();
+const shoperService = new ShoperService();
 
 const credentialsSchema = z.object({
   apiKey: z.string().min(1),
@@ -53,6 +55,17 @@ settingsRouter.get("/test-connection", async (_req: Request, res: Response) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Nieznany błąd integracji";
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+settingsRouter.get("/test-shoper", async (_req: Request, res: Response) => {
+  try {
+    const result = await shoperService.healthCheck();
+    res.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Nieznany błąd integracji Shoper";
     res.status(500).json({ ok: false, error: message });
   }
 });

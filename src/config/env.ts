@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -11,6 +13,12 @@ const envSchema = z.object({
   IDOXXY_CLIENT_ID: z.string().optional(),
   IDOXXY_CLIENT_SECRET: z.string().optional(),
   IDOXXY_BASE_URL: z.string().url().default("https://api.idoxxy.com"),
+  SHOPER_BASE_URL: z
+    .string()
+    .url()
+    .default("https://example.shoper.pl/webapi/rest"),
+  SHOPER_CLIENT_ID: z.string().optional(),
+  SHOPER_CLIENT_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
