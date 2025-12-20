@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shoper ↔ Idoxxy – Profil klienta</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background-color: #f5f7fa;
+        color: #1f2a44;
+      }
+      header {
+        background: linear-gradient(135deg, #1f4b99, #5b8def);
+        color: #fff;
+        padding: 32px 24px;
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      header p {
+        margin: 0;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      nav {
+        background: #0f1f3d;
+        color: #fff;
+      }
+      nav ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      nav a {
+        display: block;
+        padding: 14px 20px;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      nav a:hover,
+      nav a.active {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      main {
+        margin: 32px auto;
+        max-width: 900px;
+        padding: 0 16px 56px;
+        display: grid;
+        gap: 24px;
+      }
+      section {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      }
+      .summary {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .card {
+        background: #f8fafc;
+        padding: 16px;
+        border-radius: 10px;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      select,
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #d3d9e2;
+        font-size: 14px;
+      }
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #1f4b99;
+        color: #fff;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #1f2a44;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .status {
+        font-size: 13px;
+        color: #52606d;
+      }
+      @media (max-width: 720px) {
+        header {
+          padding: 24px 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Profil klienta</h1>
+      <p>
+        Zobacz dane klienta zsynchronizowane z Idoxxy i zarządzaj przypisanymi
+        grupami odbiorców.
+      </p>
+    </header>
+    <nav>
+      <ul>
+        <li><a href="/">Start</a></li>
+        <li><a href="/settings">Panel ustawień</a></li>
+        <li><a href="/customers.html" class="active">Klienci</a></li>
+        <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
+        <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
+      </ul>
+    </nav>
+    <main>
+      <section>
+        <h2>Dane klienta</h2>
+        <div class="summary" id="customerSummary">
+          <div class="card">Ładowanie danych klienta...</div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Grupy Idoxxy</h2>
+        <p class="status">Zarządzaj przynależnością do grup (multiselect).</p>
+        <label for="groupSelect">Wybrane grupy</label>
+        <select id="groupSelect" multiple size="8"></select>
+        <div class="actions">
+          <button class="primary" id="saveGroups">Zapisz zmiany</button>
+          <button class="secondary" id="cancelGroups">Anuluj</button>
+          <span class="status" id="groupStatus"></span>
+        </div>
+      </section>
+    </main>
+    <script>
+      const apiBase = "/admin/idoxxy";
+      const summary = document.getElementById("customerSummary");
+      const groupSelect = document.getElementById("groupSelect");
+      const groupStatus = document.getElementById("groupStatus");
+
+      const params = new URLSearchParams(window.location.search);
+      const customerId = params.get("id");
+      let loadedGroups = [];
+      let currentCustomer = null;
+
+      const requestJson = async (path, options = {}) => {
+        const response = await fetch(`${apiBase}${path}`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+          ...options,
+        });
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || `Błąd ${response.status}`);
+        }
+        if (response.status === 204) {
+          return null;
+        }
+        return response.json();
+      };
+
+      const renderSummary = (customer) => {
+        summary.innerHTML = "";
+        const cards = [
+          { label: "Nazwa", value: customer.name },
+          { label: "Email", value: customer.email },
+          { label: "Status", value: customer.status || "-" },
+          { label: "Ostatnia aktywność", value: customer.lastActivity ? new Date(customer.lastActivity).toLocaleString("pl-PL") : "-" },
+        ];
+        cards.forEach((card) => {
+          const element = document.createElement("div");
+          element.className = "card";
+          element.innerHTML = `<strong>${card.label}</strong><div>${card.value || "-"}</div>`;
+          summary.appendChild(element);
+        });
+      };
+
+      const fillGroupOptions = (groups, selected = []) => {
+        groupSelect.innerHTML = "";
+        groups.forEach((group) => {
+          const option = document.createElement("option");
+          option.value = group.id;
+          option.textContent = group.name;
+          option.selected = selected.includes(group.id);
+          groupSelect.appendChild(option);
+        });
+      };
+
+      const loadCustomer = async () => {
+        if (!customerId) {
+          summary.innerHTML = "<div class='card'>Brak identyfikatora klienta w adresie URL.</div>";
+          return;
+        }
+        try {
+          const [customerResponse, groupsResponse] = await Promise.all([
+            requestJson(`/customers/${customerId}`),
+            requestJson("/groups"),
+          ]);
+          currentCustomer = customerResponse.customer || customerResponse;
+          loadedGroups = groupsResponse.items || [];
+
+          renderSummary(currentCustomer);
+          fillGroupOptions(loadedGroups, currentCustomer.groupIds || []);
+        } catch (error) {
+          summary.innerHTML = "<div class='card'>Nie udało się pobrać danych klienta.</div>";
+        }
+      };
+
+      document.getElementById("saveGroups").addEventListener("click", async () => {
+        if (!customerId) return;
+        try {
+          const payload = {
+            groupIds: Array.from(groupSelect.selectedOptions).map((option) => option.value),
+          };
+          await requestJson(`/customers/${customerId}/groups`, {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          });
+          groupStatus.textContent = "Zapisano zmiany w grupach.";
+        } catch (error) {
+          groupStatus.textContent = "Nie udało się zapisać grup.";
+        }
+      });
+
+      document.getElementById("cancelGroups").addEventListener("click", () => {
+        if (currentCustomer) {
+          fillGroupOptions(loadedGroups, currentCustomer.groupIds || []);
+          groupStatus.textContent = "Przywrócono poprzednie ustawienia.";
+        }
+      });
+
+      loadCustomer();
+    </script>
+  </body>
+</html>
