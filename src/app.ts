@@ -4,6 +4,7 @@ import express, { type Request, type Response } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 
+import { idoxxyAdminRouter } from "./routes/idoxxyAdmin";
 import { settingsRouter } from "./routes/settings";
 
 export const createApp = () => {
@@ -20,6 +21,7 @@ export const createApp = () => {
   });
 
   app.use("/settings", settingsRouter);
+  app.use("/admin/idoxxy", idoxxyAdminRouter);
 
   return app;
 };
