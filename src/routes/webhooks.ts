@@ -7,6 +7,7 @@ import { env } from "../config/env";
 import { settingsRepository } from "../repositories/settingsRepository";
 import type { EventMapping } from "../types/settings";
 import { IdoxxyService } from "../services/idoxxyService";
+import { shopConnectionService } from "../services/shopConnectionService";
 
 type MappingResolution = {
   source: "mapping" | "fallback";
@@ -103,6 +104,24 @@ const mappingMatchesPayload = (mapping: EventMapping, payload: unknown) => {
   });
 };
 
+const resolveShopId = (req: Request): string | undefined => {
+  const headerId =
+    req.header("X-Shoper-Shop-Id") ||
+    req.header("X-Shop-Id") ||
+    req.header("X-Shop") ||
+    req.header("X-Shop-Url");
+  const bodyId = (req.body as any)?.shop_id ?? (req.body as any)?.shopId;
+  return (headerId ?? bodyId)?.toString();
+};
+
+const handleAuthError = (shopId: string, error: unknown) => {
+  const status = (error as any)?.response?.status;
+  if (status === 401 || status === 403) {
+    const message = error instanceof Error ? error.message : "Idoxxy auth error";
+    shopConnectionService.markTokenInvalid(shopId, message);
+  }
+};
+
 const resolveMappingGroups = (
   eventKey: string,
   payload: unknown,
@@ -189,6 +208,10 @@ webhooksRouter.post(
   verifyShoperSignature,
   async (req: Request, res: Response) => {
     const startTime = Date.now();
+    const shopId = resolveShopId(req);
+    if (!shopId) {
+      return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu w webhooku." });
+    }
     const parsed = customerCreatedSchema.safeParse(req.body);
 
     if (!parsed.success) {
@@ -213,6 +236,43 @@ webhooksRouter.post(
       payload,
       snapshot.defaultGroupIds.registration,
     );
+
+    const connection = shopConnectionService.getConnection(shopId);
+    if (!connection || connection.status !== "linked" || !connection.idoxxyTokenEncrypted) {
+      settingsRepository.addSyncLog({
+        event: "customer.created",
+        source: "webhook",
+        customerEmail: payload.customer.email,
+        shoperCustomerId: payload.customer.id.toString(),
+        action: "sync-customer",
+        status: "error",
+        details: {
+          error: "Brak aktywnego połączenia sklepu z Idoxxy",
+        },
+        durationMs: Date.now() - startTime,
+      });
+      return res.status(428).json({ ok: false, error: "Sklep nie jest połączony z Idoxxy" });
+    }
+
+    let idoxxyClient;
+    try {
+      idoxxyClient = idoxxyService.getClientForShop(shopId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Brak klienta Idoxxy dla sklepu";
+      settingsRepository.addSyncLog({
+        event: "customer.created",
+        source: "webhook",
+        customerEmail: payload.customer.email,
+        shoperCustomerId: payload.customer.id.toString(),
+        action: "sync-customer",
+        status: "error",
+        details: {
+          error: message,
+        },
+        durationMs: Date.now() - startTime,
+      });
+      return res.status(428).json({ ok: false, error: message });
+    }
 
     if (!resolution) {
       settingsRepository.addSyncLog({
@@ -242,8 +302,12 @@ webhooksRouter.post(
         lastName: payload.customer.last_name ?? undefined,
       };
 
-      const ensuredCustomer = await idoxxyService.ensureCustomerExists(customer);
-      await idoxxyService.addCustomerToGroups(ensuredCustomer.id, resolution.groupIds);
+      const ensuredCustomer = await idoxxyService.ensureCustomerExists(customer, idoxxyClient);
+      await idoxxyService.addCustomerToGroups(
+        ensuredCustomer.id,
+        resolution.groupIds,
+        idoxxyClient,
+      );
 
       const logDetails: any = {
         groupsAssigned: resolution.groupIds,
@@ -267,6 +331,7 @@ webhooksRouter.post(
 
       return res.json({ ok: true, groups: resolution.groupIds, source: resolution.source });
     } catch (error) {
+      handleAuthError(shopId, error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const errorLogDetails: any = {
         error: errorMessage,
@@ -296,6 +361,10 @@ webhooksRouter.post(
   verifyShoperSignature,
   async (req: Request, res: Response) => {
     const startTime = Date.now();
+    const shopId = resolveShopId(req);
+    if (!shopId) {
+      return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu w webhooku." });
+    }
     const parsed = orderCreatedSchema.safeParse(req.body);
 
     if (!parsed.success) {
@@ -321,6 +390,51 @@ webhooksRouter.post(
       payload,
       snapshot.defaultGroupIds.order,
     );
+
+    const connection = shopConnectionService.getConnection(shopId);
+    if (!connection || connection.status !== "linked" || !connection.idoxxyTokenEncrypted) {
+      const logData: any = {
+        event: "order.created",
+        source: "webhook",
+        orderId: payload.order.id.toString(),
+        action: "sync-customer",
+        status: "error",
+        details: {
+          error: "Brak aktywnego połączenia sklepu z Idoxxy",
+        },
+        durationMs: Date.now() - startTime,
+      };
+      const customerEmailMissingLink = payload.order.email || payload.customer?.email;
+      if (customerEmailMissingLink) {
+        logData.customerEmail = customerEmailMissingLink;
+      }
+      settingsRepository.addSyncLog(logData);
+      return res.status(428).json({ ok: false, error: "Sklep nie jest połączony z Idoxxy" });
+    }
+
+    let idoxxyClient;
+    try {
+      idoxxyClient = idoxxyService.getClientForShop(shopId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Brak klienta Idoxxy dla sklepu";
+      const logData: any = {
+        event: "order.created",
+        source: "webhook",
+        orderId: payload.order.id.toString(),
+        action: "sync-customer",
+        status: "error",
+        details: {
+          error: message,
+        },
+        durationMs: Date.now() - startTime,
+      };
+      const customerEmailMissingClient = payload.order.email || payload.customer?.email;
+      if (customerEmailMissingClient) {
+        logData.customerEmail = customerEmailMissingClient;
+      }
+      settingsRepository.addSyncLog(logData);
+      return res.status(428).json({ ok: false, error: message });
+    }
 
     if (!resolution) {
       const logData: any = {
@@ -374,8 +488,12 @@ webhooksRouter.post(
     }
 
     try {
-      const ensuredCustomer = await idoxxyService.ensureCustomerExists(customer);
-      await idoxxyService.addCustomerToGroups(ensuredCustomer.id, resolution.groupIds);
+      const ensuredCustomer = await idoxxyService.ensureCustomerExists(customer, idoxxyClient);
+      await idoxxyService.addCustomerToGroups(
+        ensuredCustomer.id,
+        resolution.groupIds,
+        idoxxyClient,
+      );
 
       const logDetails: any = {
         groupsAssigned: resolution.groupIds,
@@ -401,6 +519,7 @@ webhooksRouter.post(
 
       return res.json({ ok: true, groups: resolution.groupIds, source: resolution.source });
     } catch (error) {
+      handleAuthError(shopId, error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const errorLogDetails: any = {
         error: errorMessage,

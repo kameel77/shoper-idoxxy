@@ -31,6 +31,7 @@ A Node.js-based server application that integrates Shoper e-commerce platform wi
 - Idoxxy API credentials storage (Base URL, API Key)
 - Connection testing and validation
 - OAuth2 token management with automatic refresh
+- Token-first linking per shop (Shoper shop → Idoxxy workspace/token) z testem `/details/me`
 
 #### 2. Customer Group Management
 - Dynamic group synchronization from Idoxxy
@@ -48,6 +49,7 @@ A Node.js-based server application that integrates Shoper e-commerce platform wi
 - Real-time processing of customer registrations and orders
 - Automatic customer creation/lookup in Idoxxy
 - Group assignment based on mapping rules
+- Shop context derived from webhook headers (`X-Shoper-Shop-Id`/`X-Shop-Id`/`X-Shop`/`X-Shop-Url`) or `shop_id` in payload; missing link → HTTP 428
 
 #### 5. Synchronization Tracking
 - Comprehensive audit logging of all sync operations
@@ -79,6 +81,10 @@ A Node.js-based server application that integrates Shoper e-commerce platform wi
 | GET | `/settings/sync-stats` | Get sync statistics |
 | GET | `/settings/test-connection` | Test Idoxxy API connection |
 | GET | `/settings/test-shoper` | Test Shoper API connection |
+| POST | `/settings/link/test` | Validate Idoxxy token for a shop |
+| POST | `/settings/link` | Save shop→workspace/token mapping |
+| GET | `/settings/link/status/:shopId` | Get link status for a shop |
+| GET | `/settings/link/connections` | List all saved connections |
 | POST | `/webhooks/shoper/customer-created` | Process customer registration |
 | POST | `/webhooks/shoper/order-created` | Process order creation |
 

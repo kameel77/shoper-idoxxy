@@ -1,5 +1,6 @@
 import { IdoxxyClient } from "../clients/idoxxyClient";
 import { settingsRepository } from "../repositories/settingsRepository";
+import { shopConnectionService } from "./shopConnectionService";
 
 type CustomerInput = {
   email: string;
@@ -15,12 +16,38 @@ type EnsuredCustomer = {
 export class IdoxxyService {
   constructor(private readonly client = new IdoxxyClient()) {}
 
-  private getClient() {
+  private getClient(apiKeyOverride?: string, baseUrlOverride?: string) {
     const creds = settingsRepository.getIdoxxyCredentials();
     const config: { baseUrl?: string; apiKey?: string } = {};
-    if (creds.baseUrl) config.baseUrl = creds.baseUrl;
-    if (creds.apiKey) config.apiKey = creds.apiKey;
+    if (baseUrlOverride) {
+      config.baseUrl = baseUrlOverride;
+    } else if (creds.baseUrl) {
+      config.baseUrl = creds.baseUrl;
+    }
+
+    if (apiKeyOverride) {
+      config.apiKey = apiKeyOverride;
+    } else if (creds.apiKey) {
+      config.apiKey = creds.apiKey;
+    }
     return new IdoxxyClient(undefined, config);
+  }
+
+  getClientForShop(shopId: string) {
+    const connection = shopConnectionService.getConnection(shopId);
+    const token = shopConnectionService.getToken(shopId);
+
+    if (!connection || !token) {
+      throw new Error(`Brak powiązanego tokena Idoxxy dla sklepu ${shopId}`);
+    }
+
+    if (connection.status !== "linked") {
+      throw new Error(
+        `Połączenie sklepu ${shopId} nie jest aktywne (status=${connection.status})`,
+      );
+    }
+
+    return this.getClient(token, connection.idoxxyBaseUrl);
   }
 
   async healthCheck() {
@@ -31,8 +58,18 @@ export class IdoxxyService {
     };
   }
 
-  async ensureCustomerExists(customer: CustomerInput): Promise<EnsuredCustomer> {
-    const client = this.getClient();
+  async testToken(apiKey: string, baseUrl?: string) {
+    const data = await this.getClient(apiKey, baseUrl).getAccountDetails();
+    return {
+      ok: true,
+      payload: data,
+    };
+  }
+
+  async ensureCustomerExists(
+    customer: CustomerInput,
+    client: IdoxxyClient = this.getClient(),
+  ): Promise<EnsuredCustomer> {
     const existing = await client.listCustomers({
       searchQuery: customer.email,
       page: 0,
@@ -52,20 +89,20 @@ export class IdoxxyService {
     return { id: created.id, email: created.email };
   }
 
-  async assignGroups(customerId: string, groupIds: string[]) {
-    const client = this.getClient();
+  async assignGroups(customerId: string, groupIds: string[], client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
     await Promise.all(
       groupIds.map((groupId) =>
-        client.addCustomersToGroup(groupId, [customerId]),
+        clientToUse.addCustomersToGroup(groupId, [customerId]),
       ),
     );
   }
 
-  async removeGroups(customerId: string, groupIds: string[]) {
-    const client = this.getClient();
+  async removeGroups(customerId: string, groupIds: string[], client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
     await Promise.all(
       groupIds.map((groupId) =>
-        client.removeCustomerFromGroup(groupId, customerId),
+        clientToUse.removeCustomerFromGroup(groupId, customerId),
       ),
     );
   }
@@ -79,20 +116,23 @@ export class IdoxxyService {
     return this.getClient().getGroups(params);
   }
 
-  async listGroups(search?: string) {
-    return this.getClient().listGroups(
+  async listGroups(search?: string, client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
+    return clientToUse.listGroups(
       search ? { search } : undefined,
     );
   }
 
-  async listCustomers(search?: string) {
-    return this.getClient().listCustomersWithGroups(
+  async listCustomers(search?: string, client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
+    return clientToUse.listCustomersWithGroups(
       search ? { search } : undefined,
     );
   }
 
-  async getCustomerGroups(customerId: string) {
-    const customer = await this.getClient().getCustomerGroups(customerId);
+  async getCustomerGroups(customerId: string, client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
+    const customer = await clientToUse.getCustomerGroups(customerId);
 
     if (!customer) {
       return null;
@@ -101,25 +141,26 @@ export class IdoxxyService {
     return customer.customerGroups ?? [];
   }
 
-  async assignCustomerToGroups(customerId: string, groupIds: string[]) {
-    const client = this.getClient();
+  async assignCustomerToGroups(customerId: string, groupIds: string[], client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
     await Promise.all(
       groupIds.map((groupId) =>
-        client.addCustomersToGroup(groupId, [customerId]),
+        clientToUse.addCustomersToGroup(groupId, [customerId]),
       ),
     );
   }
 
-  async addCustomersToGroup(groupId: string, customerIds: string[]) {
-    await this.getClient().addCustomersToGroup(groupId, customerIds);
+  async addCustomersToGroup(groupId: string, customerIds: string[], client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
+    await clientToUse.addCustomersToGroup(groupId, customerIds);
   }
 
-  async addCustomerToGroups(customerId: string, groupIds: string[]) {
+  async addCustomerToGroups(customerId: string, groupIds: string[], client?: IdoxxyClient) {
     if (groupIds.length === 0) {
       return { ok: true };
     }
 
-    await this.assignCustomerToGroups(customerId, groupIds);
+    await this.assignCustomerToGroups(customerId, groupIds, client);
     return { ok: true };
   }
 }

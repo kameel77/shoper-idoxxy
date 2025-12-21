@@ -202,6 +202,20 @@
         border-radius: 999px;
         font-size: 12px;
       }
+      .muted {
+        color: #52606d;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: #0c4a6e;
+        font-weight: 600;
+        font-size: 12px;
+      }
       @media (max-width: 720px) {
         header {
           padding: 24px 16px;
@@ -232,6 +246,48 @@
       </ul>
     </nav>
     <main>
+      <section id="linking">
+        <h2>Połącz sklep z Idoxxy (token-first)</h2>
+        <p class="muted">
+          Wygeneruj token w Idoxxy (zakres: dostęp do workspace’a) i wklej go tutaj, aby powiązać
+          sklep Shoper z workspace’em. Backend zweryfikuje token przez <code>/details/me</code>.
+        </p>
+        <div class="grid columns-2">
+          <div>
+            <label for="linkShopId">Shop ID</label>
+            <input id="linkShopId" placeholder="np. 12345" />
+            <p class="help">Identyfikator sklepu z Shoper (nagłówki webhooków).</p>
+          </div>
+          <div>
+            <label for="linkShopUrl">Shop URL (opcjonalnie)</label>
+            <input id="linkShopUrl" placeholder="https://twoj-sklep.shoper.pl" />
+          </div>
+          <div>
+            <label for="linkToken">Token Idoxxy</label>
+            <input id="linkToken" placeholder="Bearer / API Key" />
+            <p class="help">Przechowywany tylko serwerowo (placeholder szyfrowania).</p>
+          </div>
+          <div>
+            <label for="linkWorkspaceId">Workspace ID (opcjonalnie)</label>
+            <input id="linkWorkspaceId" placeholder="UUID workspace" />
+            <p class="help">Jeśli token nie jest przypisany do jednego workspace’a, wybierz z listy.</p>
+          </div>
+          <div>
+            <label for="linkBaseUrl">Idoxxy Base URL (opcjonalnie)</label>
+            <input id="linkBaseUrl" placeholder="https://api.idoxxy.com" />
+          </div>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="testButton">Testuj połączenie</button>
+          <button class="primary" id="connectButton">Połącz</button>
+          <button class="ghost" id="refreshConnections">Odśwież status</button>
+        </div>
+        <div id="linkStatus" class="status" style="margin-top:12px;">Brak akcji.</div>
+        <div style="margin-top:16px;">
+          <h3>Powiązane sklepy</h3>
+          <div id="connectionsList" class="grid columns-2"></div>
+        </div>
+      </section>
       <section>
         <div class="grid columns-2">
           <div>
@@ -337,6 +393,13 @@
       const mappingsBody = document.getElementById("mappingsBody");
       const mappingStats = document.getElementById("mappingStats");
       const lastSync = document.getElementById("lastSync");
+      const linkShopId = document.getElementById("linkShopId");
+      const linkShopUrl = document.getElementById("linkShopUrl");
+      const linkToken = document.getElementById("linkToken");
+      const linkWorkspaceId = document.getElementById("linkWorkspaceId");
+      const linkBaseUrl = document.getElementById("linkBaseUrl");
+      const linkStatus = document.getElementById("linkStatus");
+      const connectionsList = document.getElementById("connectionsList");
 
       let cachedGroups = [];
       let cachedDocuments = [];
@@ -385,6 +448,50 @@
         connectionStatus.className = `status ${classMap[state] ?? ""}`;
       };
       setConnectionStatus("unknown");
+
+      const setLinkStatus = (message, type = "") => {
+        linkStatus.textContent = message;
+        linkStatus.className = `status ${type}`;
+      };
+
+      const renderConnections = (items) => {
+        if (!items || items.length === 0) {
+          connectionsList.innerHTML = '<p class="muted">Brak zapisanych połączeń.</p>';
+          return;
+        }
+
+        connectionsList.innerHTML = items
+          .map((c) => {
+            const verified = c.tokenLastVerifiedAt
+              ? new Date(c.tokenLastVerifiedAt).toLocaleString()
+              : "–";
+            return `
+              <div class="status" style="border:1px solid #e2e8f0;">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <strong>${c.shopId}</strong>
+                  <span class="badge">${c.status}</span>
+                </div>
+                <div class="muted" style="margin-top:6px;">Workspace: ${c.idoxxyWorkspaceId ?? "–"}</div>
+                <div class="muted">Base URL: ${c.idoxxyBaseUrl ?? "default"}</div>
+                <div class="muted">Last verified: ${verified}</div>
+              </div>
+            `;
+          })
+          .join("");
+      };
+
+      const loadConnections = async () => {
+        try {
+          const data = await requestJson("/settings/link/connections");
+          if (data?.ok) {
+            renderConnections(data.items || []);
+          } else {
+            setLinkStatus("Nie udało się pobrać połączeń", "error");
+          }
+        } catch (_error) {
+          setLinkStatus("Błąd pobierania połączeń", "error");
+        }
+      };
 
       const fillSelectOptions = (select, values, selected = []) => {
         select.innerHTML = "";
@@ -690,7 +797,66 @@
         setStatus("Przywrócono dane z serwera.", "");
       });
 
+      document.getElementById("testButton").addEventListener("click", async () => {
+        const payload = {
+          shopId: linkShopId.value.trim(),
+          shopUrl: linkShopUrl.value.trim() || undefined,
+          token: linkToken.value.trim(),
+          baseUrl: linkBaseUrl.value.trim() || undefined,
+        };
+
+        if (!payload.shopId || !payload.token) {
+          setLinkStatus("Podaj shopId i token Idoxxy", "error");
+          return;
+        }
+
+        setLinkStatus("Testuję połączenie...", "");
+        try {
+          await requestJson("/settings/link/test", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          setLinkStatus("Token działa – pobrano /details/me", "ok");
+          await loadConnections();
+        } catch (error) {
+          setLinkStatus(error.message || "Token nie działa", "error");
+        }
+      });
+
+      document.getElementById("connectButton").addEventListener("click", async () => {
+        const payload = {
+          shopId: linkShopId.value.trim(),
+          shopUrl: linkShopUrl.value.trim() || undefined,
+          token: linkToken.value.trim(),
+          workspaceId: linkWorkspaceId.value.trim() || undefined,
+          baseUrl: linkBaseUrl.value.trim() || undefined,
+        };
+
+        if (!payload.shopId || !payload.token) {
+          setLinkStatus("Podaj shopId i token Idoxxy", "error");
+          return;
+        }
+
+        setLinkStatus("Łączę sklep z Idoxxy...", "");
+        try {
+          await requestJson("/settings/link", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          setLinkStatus("Połączono sklep z Idoxxy", "ok");
+          await loadConnections();
+        } catch (error) {
+          setLinkStatus(error.message || "Nie udało się połączyć", "error");
+        }
+      });
+
+      document.getElementById("refreshConnections").addEventListener("click", () => {
+        loadConnections();
+        setLinkStatus("Odświeżono listę połączeń", "");
+      });
+
       loadSettings();
+      loadConnections();
     </script>
   </body>
 </html>
