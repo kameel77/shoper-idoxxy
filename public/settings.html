@@ -401,6 +401,39 @@
       const linkStatus = document.getElementById("linkStatus");
       const connectionsList = document.getElementById("connectionsList");
 
+      // Auto-extract shop ID from URL
+      const extractShopIdFromUrl = (url) => {
+        if (!url) return "";
+        try {
+          const urlObj = new URL(url);
+          // Extract shop ID from subdomain (e.g., devshop-144794.shoparena.pl -> devshop-144794)
+          const match = urlObj.hostname.match(/^([^.]+)\./);
+          return match ? match[1] : "";
+        } catch (error) {
+          return "";
+        }
+      };
+
+      // Update shop ID when URL changes
+      linkShopUrl.addEventListener("input", (event) => {
+        const url = event.target.value.trim();
+        const extractedId = extractShopIdFromUrl(url);
+        if (extractedId && !linkShopId.value) {
+          linkShopId.value = extractedId;
+        }
+      });
+
+      // Also update on paste
+      linkShopUrl.addEventListener("paste", (event) => {
+        setTimeout(() => {
+          const url = event.target.value.trim();
+          const extractedId = extractShopIdFromUrl(url);
+          if (extractedId && !linkShopId.value) {
+            linkShopId.value = extractedId;
+          }
+        }, 0);
+      });
+
       let cachedGroups = [];
       let cachedDocuments = [];
 

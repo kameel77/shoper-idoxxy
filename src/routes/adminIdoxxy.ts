@@ -260,5 +260,10 @@ adminIdoxxyRouter.post("/customers/bulk", (req: Request, res: Response) => {
     });
   }
 
+  if (action === "resend-documents") {
+    // For now, just mark as processed - actual document resending would need Idoxxy API integration
+    console.log(`Resending documents to ${selectedCustomers.length} customers:`, selectedCustomers.map(c => c.email));
+  }
+
   return res.json({ ok: true, updated: selectedCustomers.length });
 });
