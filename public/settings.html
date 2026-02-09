@@ -254,6 +254,7 @@
         <li><a href="/customers.html">Klienci</a></li>
         <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
         <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
+        <li style="margin-left: auto;"><a href="#" id="logoutBtn" style="color: #fca5a5;">Wyloguj</a></li>
       </ul>
     </nav>
     <main>
@@ -902,6 +903,17 @@
 
       loadSettings();
       loadConnections();
+
+      // Logout handler
+      document.getElementById("logoutBtn").addEventListener("click", async (e) => {
+        e.preventDefault();
+        try {
+          await requestJson("/auth/logout", { method: "POST" });
+          window.location.href = "/login.html";
+        } catch (error) {
+          console.error("Logout error:", error);
+        }
+      });
     </script>
   </body>
 </html>

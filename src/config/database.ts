@@ -82,21 +82,20 @@ export const initDatabase = () => {
     )
   `);
 
-  // Insert default settings if not exists
-  const defaultSettings = [
-    { key: "idoxxy_base_url", value: "https://api.idoxxy.com" },
-    { key: "fallback_registration_groups", value: "[]" },
-    { key: "fallback_order_groups", value: "[]" },
-    { key: "path_mappings", value: "[]" },
-  ];
-
-  const insertStmt = db.prepare(
-    "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)"
-  );
-
-  for (const setting of defaultSettings) {
-    insertStmt.run(setting.key, setting.value, Date.now());
-  }
+  // Users table for admin authentication
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'admin',
+      is_active INTEGER DEFAULT 1,
+      last_login_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
 
   console.log("[Database] Initialized successfully");
 };

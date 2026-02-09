@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shoper ↔ Idoxxy – Admin Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background-color: #f5f7fa;
+        color: #1f2a44;
+      }
+      header {
+        background: linear-gradient(135deg, #1f4b99, #5b8def);
+        color: #fff;
+        padding: 32px 24px;
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      header p {
+        margin: 0;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      nav {
+        background: #0f1f3d;
+        color: #fff;
+      }
+      nav ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      nav a {
+        display: block;
+        padding: 14px 20px;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      nav a:hover,
+      nav a.active {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      main {
+        margin: 32px auto;
+        max-width: 1200px;
+        padding: 0 16px 56px;
+      }
+      section {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        margin-bottom: 24px;
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 22px;
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .stat-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(15, 23, 42, 0.05);
+        border-left: 4px solid #3b82f6;
+      }
+      .stat-card.success {
+        border-left-color: #22c55e;
+      }
+      .stat-card.warning {
+        border-left-color: #f59e0b;
+      }
+      .stat-card.error {
+        border-left-color: #ef4444;
+      }
+      .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: #1f2a44;
+        margin: 8px 0;
+      }
+      .stat-label {
+        font-size: 14px;
+        color: #52606d;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 12px 10px;
+        border-bottom: 1px solid #e2e8f0;
+        text-align: left;
+      }
+      th {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #52606d;
+        font-weight: 600;
+      }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .status-linked {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .status-not-linked {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .status-token-invalid {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+      }
+      button {
+        border: none;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button.primary {
+        background: #1f4b99;
+        color: #fff;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #1f2a44;
+      }
+      .logout-btn {
+        margin-left: auto;
+        background: transparent !important;
+        color: #fca5a5 !important;
+      }
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #52606d;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🎛️ Admin Dashboard</h1>
+      <p>Panel administratora aplikacji Shoper ↔ Idoxxy. Zarządzaj połączeniami sklepów i monitoruj status integracji.</p>
+    </header>
+    <nav>
+      <ul>
+        <li><a href="/admin/dashboard.html" class="active">Dashboard</a></li>
+        <li><a href="/settings">Ustawienia (dev)</a></li>
+        <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
+        <li><button class="logout-btn" id="logoutBtn">Wyloguj</button></li>
+      </ul>
+    </nav>
+    <main>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Wszystkie sklepy</div>
+          <div class="stat-value" id="totalShops">-</div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-label">Połączone</div>
+          <div class="stat-value" id="linkedShops">-</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-label">Niepołączone</div>
+          <div class="stat-value" id="notLinkedShops">-</div>
+        </div>
+        <div class="stat-card error">
+          <div class="stat-label">Błędy tokenów</div>
+          <div class="stat-value" id="tokenInvalidShops">-</div>
+        </div>
+      </div>
+
+      <section>
+        <h2>📋 Lista sklepów</h2>
+        <div id="shopsTable">
+          <div class="loading">Ładowanie danych...</div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const apiBase = "";
+
+      const requestJson = async (path, options = {}) => {
+        const url = `${apiBase}${path}`;
+        try {
+          const response = await fetch(url, {
+            headers: {
+              "Content-Type": "application/json",
+              ...(options.headers || {}),
+            },
+            ...options,
+          });
+          if (!response.ok) {
+            if (response.status === 401) {
+              window.location.href = "/login.html";
+              return null;
+            }
+            const message = await response.text();
+            throw new Error(message || `Błąd ${response.status}`);
+          }
+          return response.json();
+        } catch (error) {
+          console.error("[dashboard] fetch error", error);
+          throw error;
+        }
+      };
+
+      const getStatusBadge = (status) => {
+        const statusMap = {
+          linked: { class: "status-linked", text: "Połączony" },
+          installed_not_linked: { class: "status-not-linked", text: "Niepołączony" },
+          token_invalid: { class: "status-token-invalid", text: "Błąd tokenu" },
+          revoked: { class: "status-not-linked", text: "Odwołany" },
+        };
+        const config = statusMap[status] || { class: "status-not-linked", text: status };
+        return `<span class="status-badge ${config.class}">${config.text}</span>`;
+      };
+
+      const formatDate = (timestamp) => {
+        if (!timestamp) return "-";
+        return new Date(timestamp).toLocaleString("pl-PL");
+      };
+
+      const loadDashboard = async () => {
+        try {
+          // Load connections
+          const connectionsData = await requestJson("/settings/link/connections");
+          
+          if (!connectionsData || !connectionsData.ok) {
+            document.getElementById("shopsTable").innerHTML = 
+              `<div class="loading">Błąd ładowania danych</div>`;
+            return;
+          }
+
+          const connections = connectionsData.items || [];
+
+          // Update stats
+          const total = connections.length;
+          const linked = connections.filter(c => c.status === "linked").length;
+          const notLinked = connections.filter(c => c.status === "installed_not_linked").length;
+          const tokenInvalid = connections.filter(c => c.status === "token_invalid").length;
+
+          document.getElementById("totalShops").textContent = total;
+          document.getElementById("linkedShops").textContent = linked;
+          document.getElementById("notLinkedShops").textContent = notLinked;
+          document.getElementById("tokenInvalidShops").textContent = tokenInvalid;
+
+          // Render table
+          if (connections.length === 0) {
+            document.getElementById("shopsTable").innerHTML = 
+              `<p style="color: #52606d;">Brak zarejestrowanych sklepów.</p>`;
+            return;
+          }
+
+          const tableHtml = `
+            <table>
+              <thead>
+                <tr>
+                  <th>Shop ID</th>
+                  <th>URL</th>
+                  <th>Status</th>
+                  <th>Workspace</th>
+                  <th>Ostatnia weryfikacja</th>
+                  <th>Utworzono</th>
+                  <th>Akcje</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${connections.map(conn => `
+                  <tr>
+                    <td><strong>${conn.shopId}</strong></td>
+                    <td>${conn.shopUrl || "-"}</td>
+                    <td>${getStatusBadge(conn.status)}</td>
+                    <td>${conn.idoxxyWorkspaceId || "-"}</td>
+                    <td>${formatDate(conn.tokenLastVerifiedAt)}</td>
+                    <td>${formatDate(conn.createdAt)}</td>
+                    <td class="actions">
+                      <button class="secondary" onclick="viewShop('${conn.shopId}')">Podgląd</button>
+                      <button class="secondary" onclick="testConnection('${conn.shopId}')">Test</button>
+                    </td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          `;
+
+          document.getElementById("shopsTable").innerHTML = tableHtml;
+        } catch (error) {
+          console.error("Error loading dashboard:", error);
+          document.getElementById("shopsTable").innerHTML = 
+            `<div class="loading">Błąd: ${error.message}</div>`;
+        }
+      };
+
+      const viewShop = (shopId) => {
+        window.open(`/settings?shopId=${shopId}`, "_blank");
+      };
+
+      const testConnection = async (shopId) => {
+        try {
+          const result = await requestJson(`/settings/link/status/${shopId}`);
+          alert(result.ok 
+            ? `✅ Status: ${result.status || "OK"}\nWorkspace: ${result.workspaceId || "-"}` 
+            : `❌ Błąd: ${result.error}`
+          );
+        } catch (error) {
+          alert(`Błąd testu: ${error.message}`);
+        }
+      };
+
+      // Logout handler
+      document.getElementById("logoutBtn").addEventListener("click", async () => {
+        try {
+          await requestJson("/auth/logout", { method: "POST" });
+          window.location.href = "/login.html";
+        } catch (error) {
+          console.error("Logout error:", error);
+        }
+      });
+
+      // Load dashboard on page load
+      loadDashboard();
+    </script>
+  </body>
+</html>
