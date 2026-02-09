@@ -97,6 +97,17 @@
         min-height: 80px;
         resize: vertical;
       }
+      select option {
+        padding: 8px 12px;
+      }
+      select option:checked {
+        background: #dbeafe;
+        color: #1e40af;
+        font-weight: 600;
+      }
+      select option:hover {
+        background: #eff6ff;
+      }
       .help {
         font-size: 13px;
         color: #52606d;
@@ -325,17 +336,18 @@
       </section>
 
       <section>
-        <h2>Fallback groups</h2>
+        <h2>Grupy domyślne</h2>
+
         <p class="help">
-          Domyślne grupy używane, gdy reguły mapowania nie zwrócą dopasowania.
+          Domyślne grupy są używane, w przypadku gdy reguły mapowania nie zwrócą dopasowania.
         </p>
         <div class="grid columns-2">
           <div>
-            <label for="fallbackRegistration">Grupy dla rejestracji</label>
+            <label for="fallbackRegistration">Wybierz grupę: rejestracja w sklepie</label>
             <select id="fallbackRegistration" name="fallbackRegistration" multiple size="6"></select>
           </div>
           <div>
-            <label for="fallbackOrder">Grupy dla zamówień</label>
+            <label for="fallbackOrder">Wybierz grupę: złozenie zamówienia</label>
             <select id="fallbackOrder" name="fallbackOrder" multiple size="6"></select>
           </div>
         </div>
@@ -723,8 +735,8 @@
         event.preventDefault();
         try {
           const payload = {
-            registration: selectedOptions(fallbackRegistration),
-            order: selectedOptions(fallbackOrder),
+            fallbackRegistrationGroupIds: selectedOptions(fallbackRegistration),
+            fallbackOrderGroupIds: selectedOptions(fallbackOrder),
           };
           await requestJson("/settings/default-groups", {
             method: "PUT",
@@ -812,8 +824,8 @@
             requestJson("/settings/default-groups", {
               method: "PUT",
               body: JSON.stringify({
-                registration: selectedOptions(fallbackRegistration),
-                order: selectedOptions(fallbackOrder),
+                fallbackRegistrationGroupIds: selectedOptions(fallbackRegistration),
+                fallbackOrderGroupIds: selectedOptions(fallbackOrder),
               }),
             }),
           ]);

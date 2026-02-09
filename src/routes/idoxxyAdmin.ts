@@ -55,6 +55,12 @@ idoxxyAdminRouter.put("/settings", (req: Request, res: Response) => {
     },
     mappings: [],
     syncLogs: [],
+    baseUrl: undefined,
+    credentials: { baseUrl: undefined, apiKey: undefined },
+    shoperApiKey: undefined,
+    idoxxyApiKey: undefined,
+    lastSyncedAt: undefined,
+    lastSettingsModifiedAt: undefined,
   };
 
   settingsRepository.updateSettings(payload);

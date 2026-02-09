@@ -6,34 +6,34 @@ export type ShopConnectionStatus =
 
 export type ShopConnection = {
   shopId: string;
-  shopUrl?: string;
+  shopUrl: string | undefined;
   status: ShopConnectionStatus;
-  idoxxyWorkspaceId?: string;
-  idoxxyBaseUrl?: string;
-  idoxxyTokenEncrypted?: string;
-  tokenLastVerifiedAt?: number;
+  idoxxyWorkspaceId: string | undefined;
+  idoxxyBaseUrl: string | undefined;
+  idoxxyTokenEncrypted: string | undefined;
+  tokenLastVerifiedAt: number | undefined;
   createdAt: number;
   updatedAt: number;
-  revokedAt?: number;
-  revokedBy?: string;
-  lastError?: string;
-  lastSyncAt?: number;
-  lastSyncStatus?: "success" | "error";
-  auditMetadata?: Record<string, unknown>;
+  revokedAt: number | undefined;
+  revokedBy: string | undefined;
+  lastError: string | undefined;
+  lastSyncAt: number | undefined;
+  lastSyncStatus: "success" | "error" | undefined;
+  auditMetadata: Record<string, unknown> | undefined;
 };
 
 export type UpsertShopConnectionPayload = {
   shopId: string;
-  shopUrl?: string;
-  idoxxyWorkspaceId?: string;
-  idoxxyBaseUrl?: string;
-  idoxxyTokenEncrypted?: string;
-  tokenLastVerifiedAt?: number;
-  status?: ShopConnectionStatus;
-  auditMetadata?: Record<string, unknown>;
-  revokedAt?: number;
-  revokedBy?: string;
-  lastError?: string;
-  lastSyncAt?: number;
-  lastSyncStatus?: "success" | "error";
+  shopUrl: string | undefined;
+  idoxxyWorkspaceId: string | undefined;
+  idoxxyBaseUrl: string | undefined;
+  idoxxyTokenEncrypted: string | undefined;
+  tokenLastVerifiedAt: number | undefined;
+  status: ShopConnectionStatus | undefined;
+  auditMetadata: Record<string, unknown> | undefined;
+  revokedAt: number | undefined;
+  revokedBy: string | undefined;
+  lastError: string | undefined;
+  lastSyncAt: number | undefined;
+  lastSyncStatus: "success" | "error" | undefined;
 };

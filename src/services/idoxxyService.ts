@@ -163,4 +163,14 @@ export class IdoxxyService {
     await this.assignCustomerToGroups(customerId, groupIds, client);
     return { ok: true };
   }
+
+  async getCustomerDocuments(customerEmail: string, client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
+    return clientToUse.getCustomerDocuments(customerEmail);
+  }
+
+  async assignDocumentToGroup(documentId: string, groupIds: string[], customerIds: string[], client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
+    return clientToUse.assignDocumentToGroup(documentId, groupIds, customerIds);
+  }
 }

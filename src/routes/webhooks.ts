@@ -218,11 +218,18 @@ webhooksRouter.post(
       settingsRepository.addSyncLog({
         event: "customer.created",
         source: "webhook",
+        customerId: undefined,
+        customerEmail: undefined,
+        orderId: undefined,
         shoperCustomerId: req.body?.customer?.id?.toString(),
         action: "sync-customer",
         status: "error",
         details: {
           error: `Validation error: ${parsed.error.issues.map(i => i.message).join(", ")}`,
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
+          sourceUsed: undefined,
         },
         durationMs: Date.now() - startTime,
       });
@@ -242,12 +249,18 @@ webhooksRouter.post(
       settingsRepository.addSyncLog({
         event: "customer.created",
         source: "webhook",
+        customerId: undefined,
         customerEmail: payload.customer.email,
+        orderId: undefined,
         shoperCustomerId: payload.customer.id.toString(),
         action: "sync-customer",
         status: "error",
         details: {
           error: "Brak aktywnego połączenia sklepu z Idoxxy",
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
+          sourceUsed: undefined,
         },
         durationMs: Date.now() - startTime,
       });
@@ -262,12 +275,18 @@ webhooksRouter.post(
       settingsRepository.addSyncLog({
         event: "customer.created",
         source: "webhook",
+        customerId: undefined,
         customerEmail: payload.customer.email,
+        orderId: undefined,
         shoperCustomerId: payload.customer.id.toString(),
         action: "sync-customer",
         status: "error",
         details: {
           error: message,
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
+          sourceUsed: undefined,
         },
         durationMs: Date.now() - startTime,
       });
@@ -278,12 +297,17 @@ webhooksRouter.post(
       settingsRepository.addSyncLog({
         event: "customer.created",
         source: "webhook",
+        customerId: undefined,
         customerEmail: payload.customer.email,
+        orderId: undefined,
         shoperCustomerId: payload.customer.id.toString(),
         action: "sync-customer",
         status: "error",
         details: {
           error: "No mapping or default groups found for customer-created webhook",
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
           sourceUsed: "fallback",
         },
         durationMs: Date.now() - startTime,
@@ -309,9 +333,12 @@ webhooksRouter.post(
         idoxxyClient,
       );
 
-      const logDetails: any = {
+      const logDetails = {
         groupsAssigned: resolution.groupIds,
         sourceUsed: resolution.source,
+        groupsRemoved: undefined as string[] | undefined,
+        mappingUsed: undefined as string | undefined,
+        error: undefined as string | undefined,
       };
       if (resolution.mapping?.name) {
         logDetails.mappingUsed = resolution.mapping.name;
@@ -322,6 +349,7 @@ webhooksRouter.post(
         source: "webhook",
         customerId: ensuredCustomer.id,
         customerEmail: ensuredCustomer.email,
+        orderId: undefined,
         shoperCustomerId: payload.customer.id.toString(),
         action: "sync-customer",
         status: "success",
@@ -333,9 +361,12 @@ webhooksRouter.post(
     } catch (error) {
       handleAuthError(shopId, error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      const errorLogDetails: any = {
+      const errorLogDetails = {
         error: errorMessage,
         sourceUsed: resolution.source,
+        groupsAssigned: undefined as string[] | undefined,
+        groupsRemoved: undefined as string[] | undefined,
+        mappingUsed: undefined as string | undefined,
       };
       if (resolution.mapping?.name) {
         errorLogDetails.mappingUsed = resolution.mapping.name;
@@ -344,7 +375,9 @@ webhooksRouter.post(
       settingsRepository.addSyncLog({
         event: "customer.created",
         source: "webhook",
+        customerId: undefined,
         customerEmail: payload.customer.email,
+        orderId: undefined,
         shoperCustomerId: payload.customer.id.toString(),
         action: "sync-customer",
         status: "error",
@@ -371,12 +404,18 @@ webhooksRouter.post(
       settingsRepository.addSyncLog({
         event: "order.created",
         source: "webhook",
+        customerId: undefined,
+        customerEmail: undefined,
         orderId: req.body?.order?.id?.toString(),
         shoperCustomerId: req.body?.customer?.id?.toString(),
         action: "sync-customer",
         status: "error",
         details: {
           error: `Validation error: ${parsed.error.issues.map(i => i.message).join(", ")}`,
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
+          sourceUsed: undefined,
         },
         durationMs: Date.now() - startTime,
       });
@@ -393,22 +432,25 @@ webhooksRouter.post(
 
     const connection = shopConnectionService.getConnection(shopId);
     if (!connection || connection.status !== "linked" || !connection.idoxxyTokenEncrypted) {
-      const logData: any = {
+      const customerEmailMissingLink = payload.order.email || payload.customer?.email;
+      settingsRepository.addSyncLog({
         event: "order.created",
         source: "webhook",
+        customerId: undefined,
+        customerEmail: customerEmailMissingLink || undefined,
         orderId: payload.order.id.toString(),
+        shoperCustomerId: undefined,
         action: "sync-customer",
         status: "error",
         details: {
           error: "Brak aktywnego połączenia sklepu z Idoxxy",
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
+          sourceUsed: undefined,
         },
         durationMs: Date.now() - startTime,
-      };
-      const customerEmailMissingLink = payload.order.email || payload.customer?.email;
-      if (customerEmailMissingLink) {
-        logData.customerEmail = customerEmailMissingLink;
-      }
-      settingsRepository.addSyncLog(logData);
+      });
       return res.status(428).json({ ok: false, error: "Sklep nie jest połączony z Idoxxy" });
     }
 
@@ -417,44 +459,48 @@ webhooksRouter.post(
       idoxxyClient = idoxxyService.getClientForShop(shopId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Brak klienta Idoxxy dla sklepu";
-      const logData: any = {
+      const customerEmailMissingClient = payload.order.email || payload.customer?.email;
+      settingsRepository.addSyncLog({
         event: "order.created",
         source: "webhook",
+        customerId: undefined,
+        customerEmail: customerEmailMissingClient || undefined,
         orderId: payload.order.id.toString(),
+        shoperCustomerId: undefined,
         action: "sync-customer",
         status: "error",
         details: {
           error: message,
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
+          sourceUsed: undefined,
         },
         durationMs: Date.now() - startTime,
-      };
-      const customerEmailMissingClient = payload.order.email || payload.customer?.email;
-      if (customerEmailMissingClient) {
-        logData.customerEmail = customerEmailMissingClient;
-      }
-      settingsRepository.addSyncLog(logData);
+      });
       return res.status(428).json({ ok: false, error: message });
     }
 
     if (!resolution) {
-      const logData: any = {
+      const customerEmail = payload.order.email || payload.customer?.email;
+      settingsRepository.addSyncLog({
         event: "order.created",
         source: "webhook",
+        customerId: undefined,
+        customerEmail: customerEmail || undefined,
         orderId: payload.order.id.toString(),
+        shoperCustomerId: undefined,
         action: "sync-customer",
         status: "error",
         details: {
           error: "No mapping or default groups found for order-created webhook",
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
           sourceUsed: "fallback",
         },
         durationMs: Date.now() - startTime,
-      };
-      const customerEmail = payload.order.email || payload.customer?.email;
-      if (customerEmail) {
-        logData.customerEmail = customerEmail;
-      }
-      // Note: customer.id is not available in order webhook payload
-      settingsRepository.addSyncLog(logData);
+      });
       // eslint-disable-next-line no-console
       console.warn("Brak mapowania lub grup domyślnych dla webhooka order-created.", {
         idoxxyPath: payload.idoxxy_path,
@@ -468,22 +514,25 @@ webhooksRouter.post(
       customer = extractCustomerFromOrder(payload);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nieznany błąd webhooka.";
-      const logData: any = {
+      const customerEmail = payload.order.email || payload.customer?.email;
+      settingsRepository.addSyncLog({
         event: "order.created",
         source: "webhook",
+        customerId: undefined,
+        customerEmail: customerEmail || undefined,
         orderId: payload.order.id.toString(),
+        shoperCustomerId: undefined,
         action: "sync-customer",
         status: "error",
         details: {
           error: message,
+          groupsAssigned: undefined,
+          groupsRemoved: undefined,
+          mappingUsed: undefined,
+          sourceUsed: undefined,
         },
         durationMs: Date.now() - startTime,
-      };
-      const customerEmail = payload.order.email || payload.customer?.email;
-      if (customerEmail) {
-        logData.customerEmail = customerEmail;
-      }
-      settingsRepository.addSyncLog(logData);
+      });
       return res.status(400).json({ ok: false, error: message });
     }
 
@@ -495,52 +544,57 @@ webhooksRouter.post(
         idoxxyClient,
       );
 
-      const logDetails: any = {
+      const logDetails = {
         groupsAssigned: resolution.groupIds,
         sourceUsed: resolution.source,
+        groupsRemoved: undefined as string[] | undefined,
+        mappingUsed: undefined as string | undefined,
+        error: undefined as string | undefined,
       };
       if (resolution.mapping?.name) {
         logDetails.mappingUsed = resolution.mapping.name;
       }
 
-      const successLogData: any = {
+      settingsRepository.addSyncLog({
         event: "order.created",
         source: "webhook",
         customerId: ensuredCustomer.id,
         customerEmail: ensuredCustomer.email,
         orderId: payload.order.id.toString(),
+        shoperCustomerId: undefined,
         action: "sync-customer",
         status: "success",
         details: logDetails,
         durationMs: Date.now() - startTime,
-      };
-      // Note: customer.id is not available in order webhook payload
-      settingsRepository.addSyncLog(successLogData);
+      });
 
       return res.json({ ok: true, groups: resolution.groupIds, source: resolution.source });
     } catch (error) {
       handleAuthError(shopId, error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      const errorLogDetails: any = {
+      const errorLogDetails = {
         error: errorMessage,
         sourceUsed: resolution.source,
+        groupsAssigned: undefined as string[] | undefined,
+        groupsRemoved: undefined as string[] | undefined,
+        mappingUsed: undefined as string | undefined,
       };
       if (resolution.mapping?.name) {
         errorLogDetails.mappingUsed = resolution.mapping.name;
       }
 
-      const errorLogData: any = {
+      settingsRepository.addSyncLog({
         event: "order.created",
         source: "webhook",
+        customerId: undefined,
         customerEmail: customer.email,
         orderId: payload.order.id.toString(),
+        shoperCustomerId: undefined,
         action: "sync-customer",
         status: "error",
         details: errorLogDetails,
         durationMs: Date.now() - startTime,
-      };
-      // Note: customer.id is not available in order webhook payload
-      settingsRepository.addSyncLog(errorLogData);
+      });
       throw error;
     }
   },

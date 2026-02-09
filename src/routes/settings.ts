@@ -20,7 +20,16 @@ const credentialsSchema = z.object({
 const defaultGroupsSchema = z.object({
   fallbackRegistrationGroupIds: z.array(z.string().uuid()).default([]),
   fallbackOrderGroupIds: z.array(z.string().uuid()).default([]),
-});
+  registration: z.array(z.string().uuid()).default([]),
+  order: z.array(z.string().uuid()).default([]),
+}).transform((data) => ({
+  fallbackRegistrationGroupIds: data.fallbackRegistrationGroupIds.length > 0 
+    ? data.fallbackRegistrationGroupIds 
+    : data.registration,
+  fallbackOrderGroupIds: data.fallbackOrderGroupIds.length > 0 
+    ? data.fallbackOrderGroupIds 
+    : data.order,
+}));
 
 const pathMappingSchema = z.object({
   pathKey: z.string().min(1),
@@ -118,7 +127,12 @@ settingsRouter.put("/credentials", (req: Request, res: Response) => {
     return res.status(400).json({ ok: false, errors: parsed.error.issues });
   }
 
-  settingsRepository.updateApiKeys(parsed.data);
+  settingsRepository.updateApiKeys({
+    baseUrl: parsed.data.baseUrl,
+    apiKey: parsed.data.apiKey,
+    shoperApiKey: undefined,
+    idoxxyApiKey: undefined,
+  });
   settingsRepository.updateLastSettingsModified();
   return res.json({ ok: true });
 });
@@ -230,9 +244,9 @@ settingsRouter.post("/link", async (req: Request, res: Response) => {
 
     const connection = shopConnectionService.saveLink({
       shopId,
-      ...(shopUrl ? { shopUrl } : {}),
-      ...(baseUrl ? { idoxxyBaseUrl: baseUrl } : {}),
-      ...(workspaceId ? { idoxxyWorkspaceId: workspaceId } : {}),
+      shopUrl: shopUrl || undefined,
+      idoxxyBaseUrl: baseUrl || undefined,
+      idoxxyWorkspaceId: workspaceId || undefined,
       token,
       status: "linked",
       tokenLastVerifiedAt: Date.now(),

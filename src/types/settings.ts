@@ -10,13 +10,13 @@ export type EventMappingCondition = {
 };
 
 export type EventMapping = {
-  id?: string;
+  id: string | undefined;
   name: string;
   event: string;
   priority: number;
   enabled: boolean;
   targetGroupIds: string[];
-  documentId?: string;
+  documentId: string | undefined;
   conditions: EventMappingCondition[];
 };
 
@@ -25,29 +25,29 @@ export type SyncLogEntry = {
   timestamp: number;
   event: string;
   source: "webhook" | "manual";
-  customerId?: string;
-  customerEmail?: string;
-  orderId?: string;
-  shoperCustomerId?: string;
+  customerId: string | undefined;
+  customerEmail: string | undefined;
+  orderId: string | undefined;
+  shoperCustomerId: string | undefined;
   action: string;
   status: "success" | "error" | "partial";
   details: {
-    groupsAssigned?: string[];
-    groupsRemoved?: string[];
-    mappingUsed?: string;
-    sourceUsed?: "mapping" | "fallback";
-    error?: string;
+    groupsAssigned: string[] | undefined;
+    groupsRemoved: string[] | undefined;
+    mappingUsed: string | undefined;
+    sourceUsed: "mapping" | "fallback" | undefined;
+    error: string | undefined;
   };
-  durationMs?: number;
+  durationMs: number | undefined;
 };
 
 export type SettingsSnapshot = {
-  shoperApiKey?: string | undefined;
-  idoxxyApiKey?: string | undefined;
-  baseUrl?: string;
-  credentials?: {
-    baseUrl?: string;
-    apiKey?: string;
+  shoperApiKey: string | undefined;
+  idoxxyApiKey: string | undefined;
+  baseUrl: string | undefined;
+  credentials: {
+    baseUrl: string | undefined;
+    apiKey: string | undefined;
   };
   fallbackRegistrationGroupIds: string[];
   fallbackOrderGroupIds: string[];
@@ -57,7 +57,7 @@ export type SettingsSnapshot = {
     order: string[];
   };
   mappings: EventMapping[];
-  lastSyncedAt?: number;
-  lastSettingsModifiedAt?: number;
+  lastSyncedAt: number | undefined;
+  lastSettingsModifiedAt: number | undefined;
   syncLogs: SyncLogEntry[];
 };

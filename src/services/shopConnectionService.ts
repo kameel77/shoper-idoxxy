@@ -1,5 +1,5 @@
 import { shopConnectionRepository } from "../repositories/shopConnectionRepository";
-import type { ShopConnection, UpsertShopConnectionPayload } from "../types/shopConnection";
+import type { ShopConnection, ShopConnectionStatus, UpsertShopConnectionPayload } from "../types/shopConnection";
 
 const encodeToken = (token: string) => {
   // Placeholder for future encryption/KMS; for now simple base64 to avoid plain-text storage.
@@ -16,11 +16,18 @@ export class ShopConnectionService {
     const payload: UpsertShopConnectionPayload = {
       shopId,
       status: "installed_not_linked",
+      shopUrl: shopUrl || undefined,
+      idoxxyWorkspaceId: undefined,
+      idoxxyBaseUrl: undefined,
+      idoxxyTokenEncrypted: undefined,
+      tokenLastVerifiedAt: undefined,
+      auditMetadata: undefined,
+      revokedAt: undefined,
+      revokedBy: undefined,
+      lastError: undefined,
+      lastSyncAt: undefined,
+      lastSyncStatus: undefined,
     };
-
-    if (shopUrl) {
-      payload.shopUrl = shopUrl;
-    }
 
     return shopConnectionRepository.upsert(payload);
   }
@@ -33,21 +40,24 @@ export class ShopConnectionService {
     return shopConnectionRepository.list();
   }
 
-  saveLink(payload: UpsertShopConnectionPayload & { token?: string }) {
-    const tokenEncoded =
-      payload.token !== undefined ? encodeToken(payload.token) : payload.idoxxyTokenEncrypted;
+  saveLink(payload: { shopId: string; token: string; status: ShopConnectionStatus | undefined; tokenLastVerifiedAt: number | undefined; shopUrl: string | undefined; idoxxyWorkspaceId: string | undefined; idoxxyBaseUrl: string | undefined; }) {
+    const tokenEncoded = encodeToken(payload.token);
 
     const upsertPayload: UpsertShopConnectionPayload = {
       shopId: payload.shopId,
       status: payload.status ?? "linked",
       tokenLastVerifiedAt: payload.tokenLastVerifiedAt ?? Date.now(),
+      shopUrl: payload.shopUrl || undefined,
+      idoxxyWorkspaceId: payload.idoxxyWorkspaceId || undefined,
+      idoxxyBaseUrl: payload.idoxxyBaseUrl || undefined,
+      idoxxyTokenEncrypted: tokenEncoded || undefined,
+      auditMetadata: undefined,
+      revokedAt: undefined,
+      revokedBy: undefined,
+      lastError: undefined,
+      lastSyncAt: undefined,
+      lastSyncStatus: undefined,
     };
-
-    if (payload.shopUrl) upsertPayload.shopUrl = payload.shopUrl;
-    if (payload.idoxxyWorkspaceId) upsertPayload.idoxxyWorkspaceId = payload.idoxxyWorkspaceId;
-    if (payload.idoxxyBaseUrl) upsertPayload.idoxxyBaseUrl = payload.idoxxyBaseUrl;
-    if (payload.auditMetadata) upsertPayload.auditMetadata = payload.auditMetadata;
-    if (tokenEncoded) upsertPayload.idoxxyTokenEncrypted = tokenEncoded;
 
     return shopConnectionRepository.upsert(upsertPayload);
   }

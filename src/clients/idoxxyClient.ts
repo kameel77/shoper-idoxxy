@@ -413,4 +413,47 @@ export class IdoxxyClient {
       customerIds,
     });
   }
+
+  async getCustomerDocuments(customerEmail: string) {
+    const response = await this.authorizedRequest<{
+      content?: Array<{
+        companyName: string;
+        documents: Array<{
+          id: string;
+          documentName: string;
+          documentType: string;
+          currentVersion?: {
+            id: string;
+            validFrom: string;
+            validTo?: string;
+            versionStatus: string;
+            uniqueLink: string;
+          };
+          versions: Array<{
+            id: string;
+            validFrom: string;
+            validTo?: string;
+            versionStatus: string;
+            uniqueLink: string;
+          }>;
+        }>;
+      }>;
+    }>({
+      method: "get",
+      url: "/customer/documents/listAll",
+      params: { searchQuery: customerEmail },
+    });
+
+    return response.data;
+  }
+
+  async assignDocumentToGroup(documentId: string, groupIds: string[], customerIds: string[]) {
+    const response = await this.authorizedRequest<Record<string, unknown>>({
+      method: "put",
+      url: `/documents/${documentId}/assign-group`,
+      data: { groupIds, customerIds },
+    });
+
+    return response.data;
+  }
 }
