@@ -410,7 +410,7 @@
       const setStatus = (message, type = "") => {
         console.log(`[Status ${type}] ${message}`);
         if (type === "error") {
-          alert(message);
+          setLinkStatus(message, "error");
         }
       };
 
