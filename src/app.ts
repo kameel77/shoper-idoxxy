@@ -26,7 +26,7 @@ export const createApp = () => {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "https://dcsaas.net"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://dcsaascdn.net"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           imgSrc: ["'self'", "data:", "https:"],
           connectSrc: ["'self'"],
