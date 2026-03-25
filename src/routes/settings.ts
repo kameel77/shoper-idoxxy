@@ -12,6 +12,9 @@ export const settingsRouter = Router();
 const idoxxyService = new IdoxxyService();
 const shoperService = new ShoperService();
 
+const firstParam = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
+
 const credentialsSchema = z.object({
   baseUrl: z.string().url().default("https://api.idoxxy.com"),
   apiKey: z.string().optional(),
@@ -177,7 +180,7 @@ settingsRouter.post("/mappings", (req: Request, res: Response) => {
 });
 
 settingsRouter.delete("/mappings/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = firstParam(req.params.id);
 
   if (!id) {
     return res.status(400).json({ ok: false, error: "Missing mapping ID" });
@@ -189,7 +192,7 @@ settingsRouter.delete("/mappings/:id", (req: Request, res: Response) => {
 });
 
 settingsRouter.get("/link/status/:shopId", (req: Request, res: Response) => {
-  const { shopId } = req.params;
+  const shopId = firstParam(req.params.shopId);
 
   if (!shopId) {
     return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu" });

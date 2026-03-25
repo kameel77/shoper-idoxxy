@@ -10,6 +10,9 @@ import { emailService } from "../services/emailService";
 const idoxxyService = new IdoxxyService();
 export const adminIdoxxyRouter = Router();
 
+const firstParam = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
+
 const credentialsSchema = z.object({
   apiKey: z.string().min(1),
   clientId: z.string().min(1),
@@ -158,7 +161,7 @@ adminIdoxxyRouter.post("/settings/mappings", (req: Request, res: Response) => {
 });
 
 adminIdoxxyRouter.delete("/settings/mappings/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = firstParam(req.params.id);
 
   if (!id) {
     return res.status(400).json({ ok: false, error: "Brak identyfikatora mapowania" });
