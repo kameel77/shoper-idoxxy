@@ -2,6 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Force development mode during build to ensure typescript is installed
+ENV NODE_ENV=development
+
 # Install dependencies needed for compiling better-sqlite3
 RUN apk add --no-cache python3 make g++ 
 
