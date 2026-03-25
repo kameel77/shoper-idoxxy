@@ -407,6 +407,13 @@
         linkStatus.className = `status ${type}`;
       };
 
+      const setStatus = (message, type = "") => {
+        console.log(`[Status ${type}] ${message}`);
+        if (type === "error") {
+          alert(message);
+        }
+      };
+
       const renderConnections = (items) => {
         if (!items || items.length === 0) {
           connectionsList.innerHTML = '<p class="muted">Brak zapisanych połączeń.</p>';
