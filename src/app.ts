@@ -1,5 +1,3 @@
-/// <reference path="./types/express.d.ts" />
-
 import path from "node:path";
 
 import cookieParser from "cookie-parser";
@@ -18,6 +16,7 @@ import { settingsRouter } from "./routes/settings";
 import { customerGroupsRouter } from "./routes/customerGroups";
 import { webhooksRouter } from "./routes/webhooks";
 import { adminIdoxxyRouter } from "./routes/adminIdoxxy";
+import { installRouter } from "./routes/install";
 
 export const createApp = () => {
   const app = express();
@@ -88,6 +87,9 @@ export const createApp = () => {
   app.use("/admin", requireAuth, express.static(path.join(process.cwd(), "public", "admin")));
   app.use(express.static(path.join(process.cwd(), "public")));
   
+  // App Store OAuth public routes
+  app.use("/", installRouter);
+
   // Webhooks don't require auth (they use signature verification)
   app.use("/webhooks", webhooksRouter);
 

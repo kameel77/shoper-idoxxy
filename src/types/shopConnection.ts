@@ -11,6 +11,8 @@ export type ShopConnection = {
   idoxxyWorkspaceId: string | undefined;
   idoxxyBaseUrl: string | undefined;
   idoxxyTokenEncrypted: string | undefined;
+  shoperAccessToken: string | undefined;
+  shoperRefreshToken: string | undefined;
   tokenLastVerifiedAt: number | undefined;
   createdAt: number;
   updatedAt: number;
@@ -28,6 +30,8 @@ export type UpsertShopConnectionPayload = {
   idoxxyWorkspaceId: string | undefined;
   idoxxyBaseUrl: string | undefined;
   idoxxyTokenEncrypted: string | undefined;
+  shoperAccessToken: string | undefined;
+  shoperRefreshToken: string | undefined;
   tokenLastVerifiedAt: number | undefined;
   status: ShopConnectionStatus | undefined;
   auditMetadata: Record<string, unknown> | undefined;

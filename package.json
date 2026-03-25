@@ -7,8 +7,8 @@
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js",
-    "lint": "echo \"TODO: add lint step\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "eslint src/",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -22,8 +22,13 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.9.1",
     "@types/nodemailer": "^7.0.9",
+    "@typescript-eslint/eslint-plugin": "^8.25.0",
+    "@typescript-eslint/parser": "^8.25.0",
+    "eslint": "^9.21.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.2",
+    "vitest": "^3.0.7"
   },
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",

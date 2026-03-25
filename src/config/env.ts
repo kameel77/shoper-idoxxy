@@ -20,6 +20,7 @@ const envSchema = z.object({
   SHOPER_CLIENT_ID: z.string().optional(),
   SHOPER_CLIENT_SECRET: z.string().optional(),
   SHOPER_WEBHOOK_SECRET: z.string().optional(),
+  SHOPER_APP_STORE_CLIENT_ID: z.string().optional(),
   SESSION_SECRET: z.string().min(32).default("change-this-secret-in-production-to-at-least-32-characters"),
   // Email configuration
   EMAIL_PROVIDER: z.enum(["sendgrid", "smtp", "console"]).default("console"),
@@ -37,3 +38,7 @@ export type Env = z.infer<typeof envSchema>;
 export const env: Env = envSchema.parse(process.env);
 
 export const isProduction = env.NODE_ENV === "production";
+
+if (isProduction && env.SESSION_SECRET === "change-this-secret-in-production-to-at-least-32-characters") {
+  throw new Error("W środowisku produkcyjnym wymagane jest podanie silnego SESSION_SECRET w zmiennych środowiskowych.");
+}

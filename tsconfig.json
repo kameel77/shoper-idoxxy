@@ -43,5 +43,6 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "moduleResolution": "node"
-  }
+  },
+  "include": ["src/**/*"]
 }

@@ -20,6 +20,8 @@ export class ShopConnectionService {
       idoxxyWorkspaceId: undefined,
       idoxxyBaseUrl: undefined,
       idoxxyTokenEncrypted: undefined,
+      shoperAccessToken: undefined,
+      shoperRefreshToken: undefined,
       tokenLastVerifiedAt: undefined,
       auditMetadata: undefined,
       revokedAt: undefined,
@@ -51,6 +53,8 @@ export class ShopConnectionService {
       idoxxyWorkspaceId: payload.idoxxyWorkspaceId || undefined,
       idoxxyBaseUrl: payload.idoxxyBaseUrl || undefined,
       idoxxyTokenEncrypted: tokenEncoded || undefined,
+      shoperAccessToken: undefined,
+      shoperRefreshToken: undefined,
       auditMetadata: undefined,
       revokedAt: undefined,
       revokedBy: undefined,
@@ -64,6 +68,19 @@ export class ShopConnectionService {
 
   markLinked(shopId: string, workspaceId: string, token: string, verifiedAt?: number) {
     return shopConnectionRepository.markLinked(shopId, workspaceId, encodeToken(token), verifiedAt);
+  }
+
+  saveShoperTokens(shopId: string, shoperAccessToken: string, shoperRefreshToken: string) {
+    const existing = this.getConnection(shopId);
+    if (!existing) {
+      throw new Error(`Shop connection not found for shop ${shopId}`);
+    }
+    
+    return shopConnectionRepository.upsert({
+      ...existing,
+      shoperAccessToken: encodeToken(shoperAccessToken),
+      shoperRefreshToken: encodeToken(shoperRefreshToken),
+    });
   }
 
   markTokenInvalid(shopId: string, lastError?: string) {
@@ -82,6 +99,14 @@ export class ShopConnectionService {
     const connection = this.getConnection(shopId);
     if (!connection?.idoxxyTokenEncrypted) return undefined;
     return decodeToken(connection.idoxxyTokenEncrypted);
+  }
+  
+  getShoperTokens(shopId: string) {
+    const connection = this.getConnection(shopId);
+    return {
+      shoperAccessToken: decodeToken(connection?.shoperAccessToken),
+      shoperRefreshToken: decodeToken(connection?.shoperRefreshToken),
+    };
   }
 }
 

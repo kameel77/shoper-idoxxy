@@ -13,15 +13,16 @@ const getAllConnectionsStmt = db.prepare("SELECT * FROM shop_connections ORDER B
 const insertConnectionStmt = db.prepare(`
   INSERT INTO shop_connections 
   (shop_id, shop_url, idoxxy_base_url, idoxxy_workspace_id, idoxxy_token_encrypted, 
-   status, token_last_verified_at, revoked_at, revoked_by, last_error, last_sync_at, 
-   last_sync_status, audit_metadata, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   shoper_access_token, shoper_refresh_token, status, token_last_verified_at, revoked_at, 
+   revoked_by, last_error, last_sync_at, last_sync_status, audit_metadata, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const updateConnectionStmt = db.prepare(`
   UPDATE shop_connections SET
     shop_url = ?, idoxxy_base_url = ?, idoxxy_workspace_id = ?, idoxxy_token_encrypted = ?,
-    status = ?, token_last_verified_at = ?, revoked_at = ?, revoked_by = ?, last_error = ?,
-    last_sync_at = ?, last_sync_status = ?, audit_metadata = ?, updated_at = ?
+    shoper_access_token = ?, shoper_refresh_token = ?, status = ?, token_last_verified_at = ?,
+    revoked_at = ?, revoked_by = ?, last_error = ?, last_sync_at = ?, last_sync_status = ?,
+    audit_metadata = ?, updated_at = ?
   WHERE shop_id = ?
 `);
 const deleteConnectionStmt = db.prepare("DELETE FROM shop_connections WHERE shop_id = ?");
@@ -35,6 +36,8 @@ export class ShopConnectionRepository {
       idoxxyWorkspaceId: row.idoxxy_workspace_id || undefined,
       idoxxyBaseUrl: row.idoxxy_base_url || undefined,
       idoxxyTokenEncrypted: row.idoxxy_token_encrypted || undefined,
+      shoperAccessToken: row.shoper_access_token || undefined,
+      shoperRefreshToken: row.shoper_refresh_token || undefined,
       tokenLastVerifiedAt: row.token_last_verified_at || undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -59,6 +62,8 @@ export class ShopConnectionRepository {
         payload.idoxxyBaseUrl ?? existing.idoxxyBaseUrl ?? null,
         payload.idoxxyWorkspaceId ?? existing.idoxxyWorkspaceId ?? null,
         payload.idoxxyTokenEncrypted ?? existing.idoxxyTokenEncrypted ?? null,
+        payload.shoperAccessToken ?? existing.shoperAccessToken ?? null,
+        payload.shoperRefreshToken ?? existing.shoperRefreshToken ?? null,
         status,
         payload.tokenLastVerifiedAt ?? existing.tokenLastVerifiedAt ?? null,
         payload.revokedAt ?? existing.revokedAt ?? null,
@@ -79,6 +84,8 @@ export class ShopConnectionRepository {
         payload.idoxxyBaseUrl ?? null,
         payload.idoxxyWorkspaceId ?? null,
         payload.idoxxyTokenEncrypted ?? null,
+        payload.shoperAccessToken ?? null,
+        payload.shoperRefreshToken ?? null,
         status,
         payload.tokenLastVerifiedAt ?? null,
         payload.revokedAt ?? null,
@@ -118,6 +125,8 @@ export class ShopConnectionRepository {
       idoxxyWorkspaceId: workspaceId,
       idoxxyBaseUrl: current.idoxxyBaseUrl,
       idoxxyTokenEncrypted: tokenEncrypted,
+      shoperAccessToken: current.shoperAccessToken,
+      shoperRefreshToken: current.shoperRefreshToken,
       tokenLastVerifiedAt: verifiedAt ?? now(),
       status: "linked",
       auditMetadata: current.auditMetadata,
@@ -139,6 +148,8 @@ export class ShopConnectionRepository {
       idoxxyWorkspaceId: current.idoxxyWorkspaceId,
       idoxxyBaseUrl: current.idoxxyBaseUrl,
       idoxxyTokenEncrypted: current.idoxxyTokenEncrypted,
+      shoperAccessToken: current.shoperAccessToken,
+      shoperRefreshToken: current.shoperRefreshToken,
       tokenLastVerifiedAt: current.tokenLastVerifiedAt,
       auditMetadata: current.auditMetadata,
       revokedAt: undefined,
@@ -160,6 +171,8 @@ export class ShopConnectionRepository {
       idoxxyWorkspaceId: current.idoxxyWorkspaceId,
       idoxxyBaseUrl: current.idoxxyBaseUrl,
       idoxxyTokenEncrypted: current.idoxxyTokenEncrypted,
+      shoperAccessToken: current.shoperAccessToken,
+      shoperRefreshToken: current.shoperRefreshToken,
       tokenLastVerifiedAt: current.tokenLastVerifiedAt,
       status: "revoked",
       auditMetadata: current.auditMetadata,
@@ -182,6 +195,8 @@ export class ShopConnectionRepository {
       idoxxyWorkspaceId: current.idoxxyWorkspaceId,
       idoxxyBaseUrl: current.idoxxyBaseUrl,
       idoxxyTokenEncrypted: current.idoxxyTokenEncrypted,
+      shoperAccessToken: current.shoperAccessToken,
+      shoperRefreshToken: current.shoperRefreshToken,
       tokenLastVerifiedAt: verifiedAt ?? now(),
       status: current.status === "token_invalid" ? "linked" : current.status,
       auditMetadata: current.auditMetadata,

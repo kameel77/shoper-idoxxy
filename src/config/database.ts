@@ -82,6 +82,19 @@ export const initDatabase = () => {
     )
   `);
 
+  // Add shoper token columns if they don't exist
+  try {
+    db.exec(`ALTER TABLE shop_connections ADD COLUMN shoper_access_token TEXT`);
+  } catch (err) {
+    // Ignore error if column already exists
+  }
+  
+  try {
+    db.exec(`ALTER TABLE shop_connections ADD COLUMN shoper_refresh_token TEXT`);
+  } catch (err) {
+    // Ignore error if column already exists
+  }
+
   // Users table for admin authentication
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (

@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 
 // Extend Express Request to include shop context
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       shopId?: string;
