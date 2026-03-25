@@ -95,20 +95,32 @@ export const createApp = () => {
   // Webhooks don't require auth (they use signature verification)
   app.use("/webhooks", webhooksRouter);
 
-  // Redirect root based on auth status
-  app.get("/", optionalAuth, (req: Request, res: Response) => {
+  // Redirect root based on auth status (handles GET and POST from Shoper iframe)
+  app.all("/", optionalAuth, (req: Request, res: Response) => {
     if (req.user) {
       // Admin is logged in - show dashboard
-      res.redirect("/admin/dashboard.html");
-    } else {
-      // Shop admin from Shoper - show settings or start page
-      const shopId = req.query.shopId || req.headers["x-shoper-shop-id"];
-      if (shopId) {
-        res.redirect(`/settings?shopId=${shopId}`);
-      } else {
-        // No shop context - could be start page or login
-        res.sendFile(path.join(process.cwd(), "public", "index.html"));
+      return res.redirect("/admin/dashboard.html");
+    }
+
+    // Combine query and body params to preserve Shoper context (e.g. shop, hash) across redirect
+    const searchParams = new URLSearchParams();
+    [req.query, req.body].forEach((source) => {
+      if (source && typeof source === "object") {
+        for (const [key, value] of Object.entries(source)) {
+          if (typeof value === "string") {
+            searchParams.set(key, value);
+          }
+        }
       }
+    });
+
+    const qs = searchParams.toString();
+    const shopId = searchParams.get("shopId") || searchParams.get("shop") || req.headers["x-shoper-shop-id"];
+
+    if (qs || shopId) {
+      res.redirect(`/settings${qs ? "?" + qs : ""}`);
+    } else {
+      res.sendFile(path.join(process.cwd(), "public", "index.html"));
     }
   });
 
