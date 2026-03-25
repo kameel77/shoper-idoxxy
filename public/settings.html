@@ -785,6 +785,14 @@
           console.error("Logout error:", error);
         }
       });
+
+      // Zmuszenie iframa Shopera (Warstwy) do rozszerzenia się z domyślnych 300x150px do pełnego rozmiaru
+      if (typeof ShopApp !== 'undefined' && ShopApp.Ajax && ShopApp.Ajax.window) {
+        try {
+          ShopApp.Ajax.window.resize(1200, 900);
+        } catch(e) {}
+      }
     </script>
+    <script src="https://dcsaas.net/js/appstore-popup.js"></script>
   </body>
 </html>
