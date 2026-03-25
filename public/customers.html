@@ -179,8 +179,7 @@
         <li><a href="/">Start</a></li>
         <li><a href="/settings">Panel ustawień</a></li>
         <li><a href="/customers.html" class="active">Klienci</a></li>
-        <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
-        <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
+        <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">iDoxxy</a></li>
       </ul>
     </nav>
     <main>
@@ -248,6 +247,7 @@
       let currentPage = 1;
       let totalPages = 1;
       let groupOptions = [];
+      let activeShopId = null;
 
       // Simple hash function to assign consistent colors to groups
       const getGroupColorClass = (groupName) => {
@@ -261,7 +261,12 @@
       };
 
       const requestJson = async (path, options = {}) => {
-        const response = await fetch(`${apiBase}${path}`, {
+        let url = `${apiBase}${path}`;
+        if (activeShopId) {
+          const sep = url.includes("?") ? "&" : "?";
+          url += `${sep}shopId=${encodeURIComponent(activeShopId)}`;
+        }
+        const response = await fetch(url, {
           headers: {
             "Content-Type": "application/json",
             ...(options.headers || {}),
@@ -440,8 +445,27 @@
         }
       });
 
-      loadGroups();
-      loadCustomers();
+      // Resolve shop context first, then load data
+      const initShopContext = async () => {
+        try {
+          const resp = await fetch("/settings/connections");
+          if (resp.ok) {
+            const data = await resp.json();
+            const connections = data.connections || [];
+            const linked = connections.find(c => c.status === "linked");
+            if (linked) {
+              activeShopId = linked.shopId;
+            }
+          }
+        } catch (e) {
+          console.warn("[customers] Could not resolve shop context", e);
+        }
+      };
+
+      initShopContext().then(() => {
+        loadGroups();
+        loadCustomers();
+      });
     </script>
   </body>
 </html>

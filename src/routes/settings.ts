@@ -3,6 +3,7 @@ import path from "node:path";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 
+import { resolveShopClient } from "../middleware/resolveShopClient";
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
 import { ShoperService } from "../services/shoperService";
@@ -107,24 +108,38 @@ settingsRouter.get("/config", (_req: Request, res: Response) => {
   res.json(settingsRepository.getSnapshot());
 });
 
-settingsRouter.get("/groups", async (_req: Request, res: Response) => {
+settingsRouter.get("/groups", async (req: Request, res: Response) => {
   try {
-    const result = await idoxxyService.listGroups();
+    const client = resolveShopClient(req);
+    const result = await client.listGroups();
     const groups = result.content.map((group: { id: string; groupName: string }) => ({
       id: group.id,
       name: group.groupName,
     }));
     res.json({ items: groups });
   } catch (error) {
+    const statusCode = (error as any)?.statusCode;
     const message =
       error instanceof Error ? error.message : "Nie udało się pobrać grup";
-    res.status(500).json({ ok: false, error: message, items: [] });
+    res.status(statusCode || 500).json({ ok: false, error: message, items: [] });
   }
 });
 
-settingsRouter.get("/documents", async (_req: Request, res: Response) => {
-  // Documents feature not yet implemented - return empty array
-  res.json({ items: [] });
+settingsRouter.get("/documents", async (req: Request, res: Response) => {
+  try {
+    const client = resolveShopClient(req);
+    const result = await client.listDocuments();
+    const documents = (result.content || []).map((doc: { id: string; documentName: string }) => ({
+      id: doc.id,
+      name: doc.documentName,
+    }));
+    res.json({ items: documents });
+  } catch (error) {
+    const statusCode = (error as any)?.statusCode;
+    const message =
+      error instanceof Error ? error.message : "Nie udało się pobrać dokumentów";
+    res.status(statusCode || 500).json({ ok: false, error: message, items: [] });
+  }
 });
 
 settingsRouter.put("/credentials", (req: Request, res: Response) => {

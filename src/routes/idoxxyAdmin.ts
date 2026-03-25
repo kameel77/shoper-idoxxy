@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 
+import { resolveShopClient } from "../middleware/resolveShopClient";
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
 import { emailService } from "../services/emailService";
@@ -85,19 +86,22 @@ idoxxyAdminRouter.put("/settings", (req: Request, res: Response) => {
   return res.json({ ok: true });
 });
 
-idoxxyAdminRouter.get("/groups", async (_req: Request, res: Response) => {
+idoxxyAdminRouter.get("/groups", async (req: Request, res: Response) => {
   try {
-    const groups = await idoxxyService.listGroups();
+    const client = resolveShopClient(req);
+    const groups = await client.listGroups();
     return res.json(groups);
   } catch (error) {
+    const statusCode = (error as any)?.statusCode;
     const message =
       error instanceof Error ? error.message : "Nieznany błąd integracji";
-    return res.status(500).json({ ok: false, error: message });
+    return res.status(statusCode || 500).json({ ok: false, error: message });
   }
 });
 
 idoxxyAdminRouter.get("/customers", async (req: Request, res: Response) => {
   try {
+    const client = resolveShopClient(req);
     const search = typeof req.query.query === "string" ? req.query.query : undefined;
     const page = typeof req.query.page === "string" ? parseInt(req.query.page, 10) : 1;
     
@@ -110,12 +114,13 @@ idoxxyAdminRouter.get("/customers", async (req: Request, res: Response) => {
       params.search = search;
     }
 
-    const customers = await idoxxyService.listCustomers(params);
+    const customers = await client.listCustomersWithGroups(params);
     return res.json(customers);
   } catch (error) {
+    const statusCode = (error as any)?.statusCode;
     const message =
       error instanceof Error ? error.message : "Nieznany błąd integracji";
-    return res.status(500).json({ ok: false, error: message });
+    return res.status(statusCode || 500).json({ ok: false, error: message });
   }
 });
 
@@ -123,8 +128,9 @@ idoxxyAdminRouter.get(
   "/customers/:id/groups",
   async (req: Request, res: Response) => {
     try {
+      const client = resolveShopClient(req);
       const { id } = req.params as { id: string };
-      const groups = await idoxxyService.getCustomerGroups(id);
+      const groups = await idoxxyService.getCustomerGroups(id, client);
       if (!groups) {
         return res
           .status(404)
@@ -133,9 +139,10 @@ idoxxyAdminRouter.get(
 
       return res.json({ ok: true, groups });
     } catch (error) {
+      const statusCode = (error as any)?.statusCode;
       const message =
         error instanceof Error ? error.message : "Nieznany błąd integracji";
-      return res.status(500).json({ ok: false, error: message });
+      return res.status(statusCode || 500).json({ ok: false, error: message });
     }
   },
 );
@@ -150,13 +157,15 @@ idoxxyAdminRouter.put(
     }
 
     try {
+      const client = resolveShopClient(req);
       const { id } = req.params as { id: string };
-      await idoxxyService.assignCustomerToGroups(id, parsed.data.groupIds);
+      await idoxxyService.assignCustomerToGroups(id, parsed.data.groupIds, client);
       return res.json({ ok: true });
     } catch (error) {
+      const statusCode = (error as any)?.statusCode;
       const message =
         error instanceof Error ? error.message : "Nieznany błąd integracji";
-      return res.status(500).json({ ok: false, error: message });
+      return res.status(statusCode || 500).json({ ok: false, error: message });
     }
   },
 );
@@ -171,15 +180,18 @@ idoxxyAdminRouter.post(
     }
 
     try {
+      const client = resolveShopClient(req);
       await idoxxyService.addCustomersToGroup(
         parsed.data.groupId,
         parsed.data.customerIds,
+        client,
       );
       return res.json({ ok: true });
     } catch (error) {
+      const statusCode = (error as any)?.statusCode;
       const message =
         error instanceof Error ? error.message : "Nieznany błąd integracji";
-      return res.status(500).json({ ok: false, error: message });
+      return res.status(statusCode || 500).json({ ok: false, error: message });
     }
   },
 );
@@ -194,21 +206,22 @@ idoxxyAdminRouter.post("/customers/bulk", async (req: Request, res: Response) =>
   const { ids, action, groupId } = parsed.data;
 
   try {
+    const client = resolveShopClient(req);
+
     if (action === "assign-group" && groupId) {
-      await idoxxyService.addCustomersToGroup(groupId, ids);
+      await idoxxyService.addCustomersToGroup(groupId, ids, client);
       return res.json({ ok: true, updated: ids.length });
     }
 
     if (action === "remove-group" && groupId) {
-      // For each customer, remove them from the group
       for (const customerId of ids) {
         try {
-          const customerGroups = await idoxxyService.getCustomerGroups(customerId);
+          const customerGroups = await idoxxyService.getCustomerGroups(customerId, client);
           if (customerGroups) {
             const updatedGroups = customerGroups
               .filter((group: any) => group.id !== groupId)
               .map((group: any) => group.id);
-            await idoxxyService.assignCustomerToGroups(customerId, updatedGroups);
+            await idoxxyService.assignCustomerToGroups(customerId, updatedGroups, client);
           }
         } catch (error) {
           console.error(`Error removing customer ${customerId} from group ${groupId}:`, error);
@@ -219,22 +232,19 @@ idoxxyAdminRouter.post("/customers/bulk", async (req: Request, res: Response) =>
 
     if (action === "resend-documents") {
       try {
-        const idoxxyClient = (idoxxyService as any).getClient();
         const results: Array<{ customerId: string; email?: string; status: string; documents?: string[]; error?: string }> = [];
 
-        // 1. List ALL documents in the Idoxxy account
-        const docsResponse = await idoxxyClient.listDocuments();
+        const docsResponse = await client.listDocuments();
         const allDocuments = docsResponse.content || [];
-        console.info(`[IdoxxyAdmin] Found ${allDocuments.length} documents in Idoxxy`);
+        console.info(`[IdoxxyAdmin] Found ${allDocuments.length} documents in iDoxxy`);
 
         if (allDocuments.length === 0) {
           return res.json({
             ok: false,
-            error: "Brak dokumentów w koncie Idoxxy. Nie ma czego wysłać.",
+            error: "Brak dokumentów w koncie iDoxxy. Nie ma czego wysłać.",
           });
         }
 
-        // 2. For each selected customer, match documents by group
         for (const customerId of ids) {
           try {
             const customerData = parsed.data.customers?.find(c => c.id === customerId);
@@ -246,16 +256,14 @@ idoxxyAdminRouter.post("/customers/bulk", async (req: Request, res: Response) =>
 
             const customerGroupIds = new Set(customerData.groupIds || []);
 
-            // Match documents whose recipients (groups) overlap with customer's groups
             const matchedDocs = allDocuments.filter((doc: any) =>
               doc.recipients?.some((recipient: any) => customerGroupIds.has(recipient.id))
             );
 
             if (matchedDocs.length === 0) {
-              // If no group match, send ALL documents as fallback
               console.info(`[IdoxxyAdmin] No group match for ${customerData.email}, sending all ${allDocuments.length} documents`);
               for (const doc of allDocuments) {
-                await idoxxyService.resendDocumentNotification(doc.id, [customerData.email]);
+                await idoxxyService.resendDocumentNotification(doc.id, [customerData.email], client);
               }
               results.push({
                 customerId,
@@ -266,7 +274,7 @@ idoxxyAdminRouter.post("/customers/bulk", async (req: Request, res: Response) =>
             } else {
               console.info(`[IdoxxyAdmin] Matched ${matchedDocs.length} documents for ${customerData.email}`);
               for (const doc of matchedDocs) {
-                await idoxxyService.resendDocumentNotification(doc.id, [customerData.email]);
+                await idoxxyService.resendDocumentNotification(doc.id, [customerData.email], client);
               }
               results.push({
                 customerId,
@@ -297,15 +305,16 @@ idoxxyAdminRouter.post("/customers/bulk", async (req: Request, res: Response) =>
 
     return res.json({ ok: true, updated: 0 });
   } catch (error) {
+    const statusCode = (error as any)?.statusCode;
     const message =
       error instanceof Error ? error.message : "Nieznany błąd operacji zbiorczej";
-    return res.status(500).json({ ok: false, error: message });
+    return res.status(statusCode || 500).json({ ok: false, error: message });
   }
 });
 
 // DEBUG: probe Idoxxy API for correct document listing endpoint
-idoxxyAdminRouter.get("/debug/documents", async (_req: Request, res: Response) => {
-  const idoxxyClient = (idoxxyService as any).getClient();
+idoxxyAdminRouter.get("/debug/documents", async (req: Request, res: Response) => {
+  const client = resolveShopClient(req);
   const results: Record<string, unknown> = {};
 
   const pathsToTry = [
@@ -317,7 +326,7 @@ idoxxyAdminRouter.get("/debug/documents", async (_req: Request, res: Response) =
 
   for (const path of pathsToTry) {
     try {
-      const response = await (idoxxyClient as any).authorizedRequest({
+      const response = await (client as any).authorizedRequest({
         method: "get",
         url: path,
       });
@@ -350,11 +359,12 @@ idoxxyAdminRouter.post("/documents/:documentId/resend-notification", async (req:
   }
 
   try {
-    // Send using global client
-    await idoxxyService.resendDocumentNotification(documentId, parsed.data.recipients);
+    const client = resolveShopClient(req);
+    await idoxxyService.resendDocumentNotification(documentId, parsed.data.recipients, client);
     return res.json({ ok: true });
   } catch (error) {
+    const statusCode = (error as any)?.statusCode;
     const message = error instanceof Error ? error.message : "Nieznany błąd podczas ponownej wysyłki dokumentu";
-    return res.status(500).json({ ok: false, error: message });
+    return res.status(statusCode || 500).json({ ok: false, error: message });
   }
 });

@@ -398,9 +398,15 @@
 
       let cachedGroups = [];
       let cachedDocuments = [];
+      let activeShopId = null;
 
       const requestJson = async (path, options = {}) => {
-        const url = `${apiBase}${path}`;
+        let url = `${apiBase}${path}`;
+        // Inject shopId as query param for per-shop context
+        if (activeShopId) {
+          const sep = url.includes("?") ? "&" : "?";
+          url += `${sep}shopId=${encodeURIComponent(activeShopId)}`;
+        }
         try {
           console.info("[settings] fetch", { url, options });
           const response = await fetch(url, {
@@ -446,6 +452,11 @@
         const sortedItems = [...items]
           .sort((a, b) => (b.tokenLastVerifiedAt || 0) - (a.tokenLastVerifiedAt || 0));
         const activeLinked = sortedItems.find((c) => c.status === "linked") || sortedItems[0];
+
+        // Set active shop context for API calls
+        if (activeLinked) {
+          activeShopId = activeLinked.shopId;
+        }
         
         if (activeLinked && !linkShopId.value) {
           linkShopId.value = activeLinked.shopId || "";
@@ -821,8 +832,8 @@
         setLinkStatus("Odświeżono listę połączeń", "");
       });
 
-      loadSettings();
-      loadConnections();
+      // Load connections first to set activeShopId, then load settings
+      loadConnections().then(() => loadSettings());
 
 
     </script>
