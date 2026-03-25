@@ -33,9 +33,11 @@ export const createApp = () => {
           fontSrc: ["'self'", "https:", "data:"],
           objectSrc: ["'none'"],
           mediaSrc: ["'self'"],
-          frameSrc: ["'none'"],
+          frameAncestors: ["*"], // Shoper uses various domains (.pl, .shoparena.pl), safest is * or specify known ones
         },
       },
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      frameguard: false, // Required for frameAncestors to work over X-Frame-Options
     }),
   );
 
@@ -52,7 +54,7 @@ export const createApp = () => {
         secure: env.NODE_ENV === "production",
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: "lax",
+        sameSite: env.NODE_ENV === "production" ? "none" : "lax", // Must be none for 3rd-party cross-origin iframes
       },
     }),
   );
