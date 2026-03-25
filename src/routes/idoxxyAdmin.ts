@@ -8,6 +8,9 @@ import { shopConnectionService } from "../services/shopConnectionService";
 import type { SettingsSnapshot } from "../types/settings";
 
 export const idoxxyAdminRouter = Router();
+
+const firstParam = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
 const idoxxyService = new IdoxxyService();
 
 const pathMappingSchema = z.object({
@@ -334,7 +337,7 @@ idoxxyAdminRouter.get("/debug/documents", async (_req: Request, res: Response) =
 });
 
 idoxxyAdminRouter.post("/documents/:documentId/resend-notification", async (req: Request, res: Response) => {
-  const { documentId } = req.params;
+  const documentId = firstParam(req.params.documentId);
   
   if (!documentId) {
     return res.status(400).json({ ok: false, error: "Brak identyfikatora dokumentu" });
