@@ -100,11 +100,10 @@
   </head>
   <body>
     <header>
-      <h1>Integracja Shoper z Idoxxy</h1>
+      <h1>Integracja Shoper z iDoxxy</h1>
       <p>
-        Wtyczka synchronizuje klientów, grupy i dokumenty trwałego nośnika
-        pomiędzy sklepem Shoper a platformą Idoxxy, gwarantując zgodność
-        prawną oraz pełny ślad doręczeń.
+        Wtyczka pozwala, aby Twoi klienci, otrzymywali dokumenty w formie trwałego nośnika
+        zgodnie z wymogami prawnymi, zapewniając dla Ciebie pełny ślad doręczeń.
       </p>
     </header>
     <nav>
@@ -119,33 +118,33 @@
       <section>
         <h2>Jak działa integracja?</h2>
         <p>
-          Połączenie wykorzystuje OAuth2 oraz klucz API Idoxxy do bezpiecznej
-          komunikacji. Wtyczka pobiera z Idoxxy zdefiniowane grupy odbiorców i
+          Połączenie wykorzystuje OAuth2 oraz klucz API iDoxxy do bezpiecznej
+          komunikacji. Wtyczka pobiera z iDoxxy zdefiniowane przez Ciebie grupy odbiorców i
           dokumenty, a następnie pozwala mapować zdarzenia w Shoperze (np.
           rejestrację konta, złożenie zamówienia) na odpowiednie grupy i
           dokumenty trwałego nośnika.
         </p>
         <ul>
-          <li>Automatyczna rejestracja oraz aktualizacja klientów w Idoxxy.</li>
+          <li>Automatyczna rejestracja oraz aktualizacja klientów w iDoxxy.</li>
           <li>Przypisywanie klientów do grup na podstawie reguł zdefiniowanych w panelu wtyczki.</li>
           <li>Wysyłka dokumentów (regulaminy, OWU) w formie trwałego nośnika z dowodem doręczenia.</li>
-          <li>Podgląd logów i diagnostyka komunikacji z API Idoxxy.</li>
+          <li>Podgląd logów i diagnostyka komunikacji z API iDoxxy.</li>
         </ul>
       </section>
 
       <section>
         <h2>Kroki konfiguracji</h2>
         <ol>
-          <li>Uzyskaj `X-API-KEY`, `client_id` i `client_secret` z panelu Idoxxy.</li>
+          <li>Pobierz token autoryzacyjny API z panelu iDoxxy.</li>
           <li>
-            W wtyczce (zakładka <em>Połączenie API</em>) zapisz poświadczenia i
+            W wtyczce (zakładka <em>Połączenie API</em>) zapisz token autoryzacyjny API i
             wykonaj test łączności.
           </li>
           <li>
             Zsynchronizuj listę grup i dokumentów, aby były dostępne w mapowaniach.
           </li>
           <li>
-            Skonfiguruj reguły przypisujące zdarzenia Shoper do grup Idoxxy oraz
+            Skonfiguruj reguły przypisujące zdarzenia Shoper do grup iDoxxy oraz
             dokumentów.
           </li>
         </ol>
@@ -156,13 +155,13 @@
         <h2>Co dalej?</h2>
         <p>
           Aktualna wersja udostępnia podstawowy panel i punkty końcowe API.
-          Kolejne iteracje dodadzą obsługę rzeczywistych webhooków Shoper,
-          zapisywanie konfiguracji w bazie oraz zaawansowane logowanie zdarzeń.
+          Platforma iDoxxy wkrótce udostępni kolejne funkcjonalności w Shoper,
+          tak, aby Twoi klienci mogli w pełni korzystać z możliwości iDoxxy oraz Ty z integracji.
         </p>
       </section>
     </main>
     <footer>
-      © Shoper ↔ Idoxxy Integrator · Budujemy zgodność z wymogiem trwałego nośnika
+      © Shoper ↔ iDoxxy Integrator · Budujemy zgodność z wymogiem trwałego nośnika
     </footer>
   </body>
 </html>
