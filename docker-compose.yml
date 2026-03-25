@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - shoper-idoxxy-data:/app/data
+    networks:
+      coolify:
+        aliases:
+          # WAŻNE: Zgodnie z wytycznymi w SKILL.md zapobiegamy kolizji nazw hostów
+          # pomiędzy środowiskami produkcyjnymi i testowymi.
+          - "${COMPOSE_PROJECT_NAME}-shoper-idoxxy-backend"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_PATH=/app/data/app.db
+      # Zmienne, które należy uzupełnić w panelu Coolify (Environment Variables):
+      # - SHOPER_CLIENT_ID
+      # - SHOPER_CLIENT_SECRET
+      # - SHOPER_APP_STORE_CLIENT_ID
+      # - SHOPER_WEBHOOK_SECRET
+      # - SESSION_SECRET (Wymagane!)
+
+volumes:
+  shoper-idoxxy-data:
+
+networks:
+  coolify:
+    external: true
