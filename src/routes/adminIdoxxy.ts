@@ -49,7 +49,7 @@ const customerGroupSchema = z.object({
 });
 
 type Group = { id: string; name: string };
-type DocumentItem = { id: string; name: string };
+type DocumentItem = { id: string; name: string; uniqueLink?: string };
 type Customer = {
   id: string;
   name: string;
@@ -57,6 +57,7 @@ type Customer = {
   status: string;
   lastActivity: string;
   groupIds: string[];
+  documents?: string[];
 };
 
 const groups: Group[] = [
@@ -68,9 +69,9 @@ const groups: Group[] = [
 ];
 
 const documents: DocumentItem[] = [
-  { id: randomUUID(), name: "Regulamin sklepu" },
-  { id: randomUUID(), name: "OWU" },
-  { id: randomUUID(), name: "Polityka prywatności" },
+  { id: randomUUID(), name: "Regulamin sklepu", uniqueLink: randomUUID() },
+  { id: randomUUID(), name: "OWU", uniqueLink: randomUUID() },
+  { id: randomUUID(), name: "Polityka prywatności", uniqueLink: randomUUID() },
 ];
 
 const customers: Customer[] = Array.from({ length: 28 }, (_, index) => {
@@ -83,6 +84,7 @@ const customers: Customer[] = Array.from({ length: 28 }, (_, index) => {
     status: index % 3 === 0 ? "pending" : index % 2 === 0 ? "active" : "disabled",
     lastActivity: new Date(Date.now() - index * 86_400_000).toISOString(),
     groupIds: [groups[index % groups.length]?.id ?? fallbackGroupId],
+    documents: index % 2 === 0 ? [documents[0]?.id, documents[1]?.id].filter(Boolean) as string[] : [],
   };
 });
 
@@ -144,8 +146,8 @@ adminIdoxxyRouter.post("/settings/mappings", (req: Request, res: Response) => {
   const { id, documentId, ...rest } = parsed.data;
   const mapping = settingsRepository.upsertMapping({
     ...rest,
-    ...(documentId ? { documentId } : {}),
-    ...(id ? { id } : {}),
+    id: id || undefined,
+    documentId: documentId || undefined,
   });
   return res.json({ ok: true, mapping });
 });
@@ -259,6 +261,39 @@ adminIdoxxyRouter.post("/customers/bulk", (req: Request, res: Response) => {
       customer.groupIds = customer.groupIds.filter((id) => id !== groupId);
     });
   }
+
+    if (action === "resend-documents") {
+      // Get customer documents from iDoxxy and return unique links
+      const customerDocuments = [];
+      
+      for (const customerId of ids) {
+        const customer = customers.find((c) => c.id === customerId);
+        if (customer && customer.documents) {
+          customerDocuments.push({
+            customerId,
+            customerEmail: customer.email,
+            customerName: customer.name,
+            documents: customer.documents.map((docId: string) => {
+              const doc = documents.find((d) => d.id === docId);
+              return {
+                documentId: docId,
+                documentName: doc?.name || "Nieznany dokument",
+                uniqueLink: doc?.uniqueLink || null,
+              };
+            }),
+          });
+        }
+      }
+
+      console.log(`[Resend Documents] Prepared documents for ${customerDocuments.length} customers`);
+      
+      return res.json({ 
+        ok: true, 
+        updated: ids.length,
+        customerDocuments,
+        message: "Dokumenty zostały przygotowane do wysłania. W rzeczywistym środowisku iDoxxy wyśle powiadomienia do klientów."
+      });
+    }
 
   return res.json({ ok: true, updated: selectedCustomers.length });
 });

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shoper ↔ Idoxxy – Logowanie</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #1f4b99 0%, #3b82f6 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #1f2a44;
+      }
+      .login-container {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 48px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        width: 100%;
+        max-width: 420px;
+        box-sizing: border-box;
+      }
+      .logo {
+        text-align: center;
+        margin-bottom: 32px;
+      }
+      .logo h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        color: #1f4b99;
+      }
+      .logo p {
+        margin: 0;
+        color: #52606d;
+        font-size: 14px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        font-size: 14px;
+        color: #374151;
+      }
+      input {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 8px;
+        border: 1px solid #d3d9e2;
+        font-size: 15px;
+        box-sizing: border-box;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+      input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+      button {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 8px;
+        background: #1f4b99;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+        margin-top: 8px;
+      }
+      button:hover {
+        background: #1e40af;
+      }
+      button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+      .alert {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-size: 14px;
+        display: none;
+      }
+      .alert.error {
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+        display: block;
+      }
+      .alert.success {
+        background: #f0fdf4;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+        display: block;
+      }
+      .info-box {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 24px;
+        font-size: 13px;
+        color: #1e40af;
+      }
+      .info-box strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-container">
+      <div class="logo">
+        <h1>Shoper ↔ Idoxxy</h1>
+        <p>Panel administracyjny</p>
+      </div>
+
+      <div id="alert" class="alert"></div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="username">Nazwa użytkownika</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="admin"
+            required
+            autocomplete="username"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Hasło</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="••••••"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button type="submit" id="submitBtn">Zaloguj się</button>
+      </form>
+
+      <div class="info-box">
+        <strong>ℹ️ Informacja</strong>
+        Domyślne dane logowania:<br />
+        Login: <strong>admin</strong><br />
+        Hasło: <strong>admin123</strong><br /><br />
+        <em>Zalecamy zmianę hasła po pierwszym logowaniu.</em>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById("loginForm");
+      const alert = document.getElementById("alert");
+      const submitBtn = document.getElementById("submitBtn");
+
+      const showAlert = (message, type = "error") => {
+        alert.textContent = message;
+        alert.className = `alert ${type}`;
+      };
+
+      const hideAlert = () => {
+        alert.className = "alert";
+        alert.textContent = "";
+      };
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideAlert();
+
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+
+        if (!username || !password) {
+          showAlert("Wprowadź nazwę użytkownika i hasło");
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Logowanie...";
+
+        try {
+          const response = await fetch("/auth/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ username, password }),
+          });
+
+          const data = await response.json();
+
+          if (data.ok) {
+            showAlert("Logowanie udane! Przekierowanie...", "success");
+            setTimeout(() => {
+              window.location.href = "/admin/dashboard.html";
+            }, 500);
+          } else {
+            showAlert(data.error || "Nieprawidłowe dane logowania");
+          }
+        } catch (error) {
+          showAlert("Błąd połączenia z serwerem");
+          console.error("Login error:", error);
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Zaloguj się";
+        }
+      });
+
+      // Check if already logged in
+      fetch("/auth/me")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.ok) {
+            window.location.href = "/settings";
+          }
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>

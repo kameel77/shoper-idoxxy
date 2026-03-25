@@ -6,6 +6,7 @@ import { z } from "zod";
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
 import { ShoperService } from "../services/shoperService";
+import { shopConnectionService } from "../services/shopConnectionService";
 
 export const settingsRouter = Router();
 const idoxxyService = new IdoxxyService();
@@ -19,7 +20,16 @@ const credentialsSchema = z.object({
 const defaultGroupsSchema = z.object({
   fallbackRegistrationGroupIds: z.array(z.string().uuid()).default([]),
   fallbackOrderGroupIds: z.array(z.string().uuid()).default([]),
-});
+  registration: z.array(z.string().uuid()).default([]),
+  order: z.array(z.string().uuid()).default([]),
+}).transform((data) => ({
+  fallbackRegistrationGroupIds: data.fallbackRegistrationGroupIds.length > 0 
+    ? data.fallbackRegistrationGroupIds 
+    : data.registration,
+  fallbackOrderGroupIds: data.fallbackOrderGroupIds.length > 0 
+    ? data.fallbackOrderGroupIds 
+    : data.order,
+}));
 
 const pathMappingSchema = z.object({
   pathKey: z.string().min(1),
@@ -38,6 +48,23 @@ const eventMappingSchema = z.object({
   enabled: z.boolean().default(true),
   conditions: z.array(z.object({})).default([]),
 });
+
+const linkTestSchema = z.object({
+  shopId: z.string().min(1),
+  shopUrl: z.string().url().optional(),
+  token: z.string().min(1),
+  baseUrl: z.string().url().optional(),
+});
+
+const linkSaveSchema = linkTestSchema.extend({
+  workspaceId: z.string().optional(),
+});
+
+const sanitizeConnection = (connection: any) => {
+  if (!connection) return null;
+  const { idoxxyTokenEncrypted, ...rest } = connection;
+  return rest;
+};
 
 settingsRouter.get("/", (_req: Request, res: Response) => {
   res.sendFile(path.join(process.cwd(), "public/settings.html"));
@@ -100,7 +127,12 @@ settingsRouter.put("/credentials", (req: Request, res: Response) => {
     return res.status(400).json({ ok: false, errors: parsed.error.issues });
   }
 
-  settingsRepository.updateApiKeys(parsed.data);
+  settingsRepository.updateApiKeys({
+    baseUrl: parsed.data.baseUrl,
+    apiKey: parsed.data.apiKey,
+    shoperApiKey: undefined,
+    idoxxyApiKey: undefined,
+  });
   settingsRepository.updateLastSettingsModified();
   return res.json({ ok: true });
 });
@@ -150,6 +182,89 @@ settingsRouter.delete("/mappings/:id", (req: Request, res: Response) => {
   settingsRepository.removeMapping(id);
   settingsRepository.updateLastSettingsModified();
   return res.json({ ok: true });
+});
+
+settingsRouter.get("/link/status/:shopId", (req: Request, res: Response) => {
+  const { shopId } = req.params;
+
+  if (!shopId) {
+    return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu" });
+  }
+
+  const connection = shopConnectionService.getConnection(shopId);
+  if (!connection) {
+    return res.status(404).json({ ok: false, error: "Połączenie dla sklepu nie istnieje" });
+  }
+
+  return res.json({ ok: true, connection: sanitizeConnection(connection) });
+});
+
+settingsRouter.get("/link/connections", (_req: Request, res: Response) => {
+  const items = shopConnectionService.listConnections().map(sanitizeConnection);
+  return res.json({ ok: true, items });
+});
+
+settingsRouter.post("/link/test", async (req: Request, res: Response) => {
+  const parsed = linkTestSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, errors: parsed.error.issues });
+  }
+
+  const { shopId, shopUrl, token, baseUrl } = parsed.data;
+  shopConnectionService.registerInstallation(shopId, shopUrl);
+
+  try {
+    const result = await idoxxyService.testToken(token, baseUrl);
+    shopConnectionService.markVerified(shopId);
+    return res.json({ ok: true, me: result.payload });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Nieznany błąd integracji";
+    const status = (error as any)?.response?.status;
+    return res.status(status === 401 || status === 403 ? 401 : 500).json({
+      ok: false,
+      error: message,
+    });
+  }
+});
+
+settingsRouter.post("/link", async (req: Request, res: Response) => {
+  const parsed = linkSaveSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, errors: parsed.error.issues });
+  }
+
+  const { shopId, shopUrl, token, baseUrl, workspaceId } = parsed.data;
+
+  shopConnectionService.registerInstallation(shopId, shopUrl);
+
+  try {
+    const result = await idoxxyService.testToken(token, baseUrl);
+
+    const connection = shopConnectionService.saveLink({
+      shopId,
+      shopUrl: shopUrl || undefined,
+      idoxxyBaseUrl: baseUrl || undefined,
+      idoxxyWorkspaceId: workspaceId || undefined,
+      token,
+      status: "linked",
+      tokenLastVerifiedAt: Date.now(),
+    });
+
+    return res.json({
+      ok: true,
+      connection: sanitizeConnection(connection),
+      me: result.payload,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Nieznany błąd integracji";
+    const status = (error as any)?.response?.status;
+    return res.status(status === 401 || status === 403 ? 401 : 500).json({
+      ok: false,
+      error: message,
+    });
+  }
 });
 
 settingsRouter.get("/sync-logs", (_req: Request, res: Response) => {

@@ -25,6 +25,12 @@ const customerGroupsSchema = z.object({
   groupIds: z.array(z.string().uuid()).default([]),
 });
 
+const bulkActionSchema = z.object({
+  action: z.enum(["assign-group", "remove-group", "resend-documents"]).optional(),
+  ids: z.array(z.string()),
+  groupId: z.string().optional(),
+});
+
 const bulkAddGroupSchema = z.object({
   groupId: z.string().uuid(),
   customerIds: z.array(z.string().uuid()).min(1),
@@ -49,6 +55,12 @@ idoxxyAdminRouter.put("/settings", (req: Request, res: Response) => {
     },
     mappings: [],
     syncLogs: [],
+    baseUrl: undefined,
+    credentials: { baseUrl: undefined, apiKey: undefined },
+    shoperApiKey: undefined,
+    idoxxyApiKey: undefined,
+    lastSyncedAt: undefined,
+    lastSettingsModifiedAt: undefined,
   };
 
   settingsRepository.updateSettings(payload);
@@ -142,3 +154,50 @@ idoxxyAdminRouter.post(
     }
   },
 );
+
+idoxxyAdminRouter.post("/customers/bulk", async (req: Request, res: Response) => {
+  const parsed = bulkActionSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, errors: parsed.error.issues });
+  }
+
+  const { ids, action, groupId } = parsed.data;
+
+  try {
+    if (action === "assign-group" && groupId) {
+      await idoxxyService.addCustomersToGroup(groupId, ids);
+      return res.json({ ok: true, updated: ids.length });
+    }
+
+    if (action === "remove-group" && groupId) {
+      // For each customer, remove them from the group
+      for (const customerId of ids) {
+        try {
+          const customerGroups = await idoxxyService.getCustomerGroups(customerId);
+          if (customerGroups) {
+            const updatedGroups = customerGroups
+              .filter((group: any) => group.id !== groupId)
+              .map((group: any) => group.id);
+            await idoxxyService.assignCustomerToGroups(customerId, updatedGroups);
+          }
+        } catch (error) {
+          console.error(`Error removing customer ${customerId} from group ${groupId}:`, error);
+        }
+      }
+      return res.json({ ok: true, updated: ids.length });
+    }
+
+    if (action === "resend-documents") {
+      // For now, just log - actual document resending would need Idoxxy API integration
+      console.log(`Resending documents to ${ids.length} customers:`, ids);
+      return res.json({ ok: true, updated: ids.length });
+    }
+
+    return res.json({ ok: true, updated: 0 });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Nieznany błąd operacji zbiorczej";
+    return res.status(500).json({ ok: false, error: message });
+  }
+});

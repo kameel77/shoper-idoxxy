@@ -9,6 +9,10 @@ Wtyczka serwerowa w Node.js, której zadaniem jest integracja sklepu Shoper z pl
 - Moduł komunikacji z API Idoxxy:
   - Autoryzacja OAuth2 (client credentials) + nagłówek `X-API-KEY`.
   - Endpoint diagnostyczny `/settings/test-connection`, który wykorzystuje `GET /details/me`.
+- Token-first linking (per sklep Shoper):
+  - UI w `/settings` do wklejenia tokena Idoxxy, testu przez `/details/me` i zapisu powiązania shop→workspace/token.
+  - Endpointy: `/settings/link/test`, `/settings/link`, `/settings/link/status/:shopId`, `/settings/link/connections`.
+  - Webhooki pracują w kontekście sklepu (nagłówek `X-Shoper-Shop-Id` / `X-Shop-Id` / `X-Shop` / `X-Shop-Url` lub `shop_id` w payloadzie); brak linku → 428 + log z błędem.
 - Warstwa konfiguracji (in-memory):
   - Zapisywanie poświadczeń API, domyślnych grup oraz mapowań zdarzeń.
   - Walidacja danych przy pomocy Zod.
@@ -56,11 +60,17 @@ Bez podanych wartości endpoint testowy zwróci błąd informujący o brakujący
 | GET    | `/settings`                 | Panel konfiguracji (placeholder). |
 | GET    | `/settings/test-connection` | Test połączenia z Idoxxy (`/details/me`). |
 | GET    | `/settings/test-shoper`     | Test połączenia z Shoper (`GET /webapi/rest/shops`). |
+| POST   | `/settings/link/test`       | Test tokena Idoxxy dla sklepu (wymaga `shopId`, `token`). |
+| POST   | `/settings/link`            | Zapis mapowania sklepu na workspace/token. |
+| GET    | `/settings/link/status/:shopId` | Status połączenia sklepu. |
+| GET    | `/settings/link/connections` | Lista powiązanych sklepów. |
 | GET    | `/settings/config`          | Zrzut aktualnych ustawień (in-memory). |
 | PUT    | `/settings/credentials`     | Zapis poświadczeń API. |
 | PUT    | `/settings/default-groups`  | Aktualizacja domyślnych grup. |
 | POST   | `/settings/mappings`        | Dodanie/aktualizacja mapowania zdarzenia. |
 | DELETE | `/settings/mappings/:id`    | Usunięcie mapowania. |
+
+Webhooki wymagają identyfikatora sklepu (`X-Shoper-Shop-Id` / `X-Shop-Id` / `X-Shop` / `X-Shop-Url` lub `shop_id` w payloadzie); na tej podstawie wybierany jest token zapisany podczas linkowania. Brak aktywnego powiązania → kod 428 oraz log błędu.
 
 ## Struktura katalogów
 

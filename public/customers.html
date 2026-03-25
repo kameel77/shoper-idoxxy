@@ -105,6 +105,7 @@
         padding: 12px 10px;
         border-bottom: 1px solid #e2e8f0;
         text-align: left;
+        font-size: smaller;
       }
       th {
         font-size: 13px;
@@ -126,13 +127,25 @@
         padding: 8px 12px;
       }
       .pill {
-        background: #eef2ff;
-        color: #4338ca;
         padding: 4px 10px;
         border-radius: 999px;
         font-size: 12px;
         font-weight: 600;
+        display: inline-block;
+        margin: 1px;
       }
+
+      /* Pastel color palette for group pills */
+      .pill-color-1 { background: #fef3c7; color: #92400e; }  /* Żółty pastel */
+      .pill-color-2 { background: #fde68a; color: #78350f; }  /* Złoty pastel */
+      .pill-color-3 { background: #fed7aa; color: #9a3412; }  /* Pomarańczowy pastel */
+      .pill-color-4 { background: #fecaca; color: #991b1b; }  /* Różowy pastel */
+      .pill-color-5 { background: #fce7f3; color: #be185d; }  /* Różowy jasny */
+      .pill-color-6 { background: #e0e7ff; color: #3730a3; }  /* Fioletowy pastel */
+      .pill-color-7 { background: #ddd6fe; color: #5b21b6; }  /* Fioletowy średni */
+      .pill-color-8 { background: #c7d2fe; color: #3730a3; }  /* Niebieski pastel */
+      .pill-color-9 { background: #bfdbfe; color: #1d4ed8; }  /* Niebieski jasny */
+      .pill-color-10 { background: #dcfce7; color: #166534; } /* Zielony pastel */
       .bulk-actions {
         display: flex;
         gap: 12px;
@@ -236,6 +249,17 @@
       let totalPages = 1;
       let groupOptions = [];
 
+      // Simple hash function to assign consistent colors to groups
+      const getGroupColorClass = (groupName) => {
+        let hash = 0;
+        for (let i = 0; i < groupName.length; i++) {
+          hash = ((hash << 5) - hash) + groupName.charCodeAt(i);
+          hash = hash & hash; // Convert to 32-bit integer
+        }
+        const colorIndex = Math.abs(hash) % 10 + 1; // 1-10
+        return `pill pill-color-${colorIndex}`;
+      };
+
       const requestJson = async (path, options = {}) => {
         const response = await fetch(`${apiBase}${path}`, {
           headers: {
@@ -272,14 +296,25 @@
         }
 
         items.forEach((customer) => {
+          // Handle both mock data format and real API format
+          const name = customer.name || `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || "Nieznany";
+          const groups = customer.groups || (customer.customerGroups ? customer.customerGroups.map(g => g.groupName) : []);
+          const status = customer.status || "active"; // Default status for real API
+          const lastActivity = customer.lastActivity || customer.updatedAt || customer.createdAt;
+
+          // Create group pills with colors
+          const groupPills = groups.length > 0
+            ? groups.map(groupName => `<span class="${getGroupColorClass(groupName)}">${groupName}</span>`).join(" ")
+            : "-";
+
           const row = document.createElement("tr");
           row.innerHTML = `
             <td class="checkbox-cell"><input type="checkbox" data-id="${customer.id}" /></td>
-            <td><a href="/customer.html?id=${customer.id}">${customer.name}</a></td>
+            <td><a href="/customer.html?id=${customer.id}">${name}</a></td>
             <td>${customer.email}</td>
-            <td>${(customer.groups || []).join(", ") || "-"}</td>
-            <td>${customer.status || "-"}</td>
-            <td>${customer.lastActivity ? new Date(customer.lastActivity).toLocaleString("pl-PL") : "-"}</td>
+            <td>${groupPills}</td>
+            <td>${status}</td>
+            <td>${lastActivity ? new Date(lastActivity).toLocaleString("pl-PL") : "-"}</td>
           `;
           customersBody.appendChild(row);
         });
@@ -308,7 +343,12 @@
       const loadGroups = async () => {
         try {
           const response = await requestJson("/groups");
-          groupOptions = response.items || [];
+          // Handle both mock data (items) and real API data (content)
+          const groups = response.items || response.content || [];
+          groupOptions = groups.map(group => ({
+            id: group.id,
+            name: group.groupName || group.name
+          }));
           bulkGroup.innerHTML = '<option value="">Wybierz grupę</option>';
           groupOptions.forEach((group) => {
             const option = document.createElement("option");
@@ -327,8 +367,10 @@
           const query = encodeURIComponent(searchInput.value.trim());
           const status = encodeURIComponent(statusFilter.value);
           const response = await requestJson(`/customers?query=${query}&status=${status}&page=${page}`);
-          renderCustomers(response.items || []);
-          totalPages = response.totalPages || 1;
+          // Handle both mock data (items) and real API data (content)
+          const customers = response.items || response.content || [];
+          renderCustomers(customers);
+          totalPages = response.totalPages || response.totalPages || 1;
           renderPagination();
         } catch (error) {
           renderCustomers([]);

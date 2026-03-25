@@ -7,3 +7,4 @@ dist
 planning.md
 *.log
 package-lock.json
+data/

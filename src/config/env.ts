@@ -20,6 +20,7 @@ const envSchema = z.object({
   SHOPER_CLIENT_ID: z.string().optional(),
   SHOPER_CLIENT_SECRET: z.string().optional(),
   SHOPER_WEBHOOK_SECRET: z.string().optional(),
+  SESSION_SECRET: z.string().min(32).default("change-this-secret-in-production-to-at-least-32-characters"),
 });
 
 export type Env = z.infer<typeof envSchema>;
