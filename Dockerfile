@@ -24,6 +24,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data && chown -R node:node /app/data
