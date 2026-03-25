@@ -799,6 +799,7 @@
       window.addEventListener('load', function() {
         if (typeof ShopApp !== 'undefined' && ShopApp.Ajax && ShopApp.Ajax.window) {
           try {
+            ShopApp.Ajax.window.show(); // Tell Shoper to remove the 'hide' class
             ShopApp.Ajax.window.resize(1200, 900);
           } catch(e) {
             console.error("Shoper SDK resize failed", e);
