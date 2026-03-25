@@ -12,6 +12,9 @@ export const settingsRouter = Router();
 const idoxxyService = new IdoxxyService();
 const shoperService = new ShoperService();
 
+const firstParam = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
+
 const credentialsSchema = z.object({
   baseUrl: z.string().url().default("https://api.idoxxy.com"),
   apiKey: z.string().optional(),
@@ -50,13 +53,17 @@ const eventMappingSchema = z.object({
 });
 
 const linkTestSchema = z.object({
-  shopId: z.string().min(1),
+  shopId: z.string(),
   shopUrl: z.string().url().optional(),
-  token: z.string().min(1),
-  baseUrl: z.string().url().optional(),
+  token: z.string().optional(),
+  baseUrl: z.string().optional(),
 });
 
-const linkSaveSchema = linkTestSchema.extend({
+const linkSaveSchema = z.object({
+  shopId: z.string(),
+  shopUrl: z.string().optional(),
+  token: z.string().optional(),
+  baseUrl: z.string().optional(),
   workspaceId: z.string().optional(),
 });
 
@@ -173,7 +180,7 @@ settingsRouter.post("/mappings", (req: Request, res: Response) => {
 });
 
 settingsRouter.delete("/mappings/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = firstParam(req.params.id);
 
   if (!id) {
     return res.status(400).json({ ok: false, error: "Missing mapping ID" });
@@ -185,7 +192,7 @@ settingsRouter.delete("/mappings/:id", (req: Request, res: Response) => {
 });
 
 settingsRouter.get("/link/status/:shopId", (req: Request, res: Response) => {
-  const { shopId } = req.params;
+  const shopId = firstParam(req.params.shopId);
 
   if (!shopId) {
     return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu" });
@@ -214,8 +221,14 @@ settingsRouter.post("/link/test", async (req: Request, res: Response) => {
   const { shopId, shopUrl, token, baseUrl } = parsed.data;
   shopConnectionService.registerInstallation(shopId, shopUrl);
 
+  const actualToken = token || shopConnectionService.getToken(shopId);
+
+  if (!actualToken) {
+    return res.status(400).json({ ok: false, error: "Brak zdefiniowanego tokenu. Wprowadź go w formularzu." });
+  }
+
   try {
-    const result = await idoxxyService.testToken(token, baseUrl);
+    const result = await idoxxyService.testToken(actualToken, baseUrl);
     shopConnectionService.markVerified(shopId);
     return res.json({ ok: true, me: result.payload });
   } catch (error) {
@@ -239,15 +252,21 @@ settingsRouter.post("/link", async (req: Request, res: Response) => {
 
   shopConnectionService.registerInstallation(shopId, shopUrl);
 
+  const actualToken = token || shopConnectionService.getToken(shopId);
+
+  if (!actualToken) {
+    return res.status(400).json({ ok: false, error: "Brak zdefiniowanego tokenu. Wprowadź go w formularzu." });
+  }
+
   try {
-    const result = await idoxxyService.testToken(token, baseUrl);
+    const result = await idoxxyService.testToken(actualToken, baseUrl);
 
     const connection = shopConnectionService.saveLink({
       shopId,
       shopUrl: shopUrl || undefined,
       idoxxyBaseUrl: baseUrl || undefined,
       idoxxyWorkspaceId: workspaceId || undefined,
-      token,
+      token: actualToken,
       status: "linked",
       tokenLastVerifiedAt: Date.now(),
     });

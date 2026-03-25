@@ -76,10 +76,6 @@ export const createApp = () => {
   // Auth routes (login/logout) - no auth required
   app.use("/auth", authRouter);
 
-  // Public static files - but protect admin folder
-  app.use("/admin", requireAuth, express.static(path.join(process.cwd(), "public", "admin")));
-  app.use(express.static(path.join(process.cwd(), "public")));
-
   // Shop-specific settings - NO auth required
   // Shop admins access these directly from Shoper.pl panel
   // Shop identification comes from headers or query params
@@ -87,6 +83,10 @@ export const createApp = () => {
   app.use("/admin/idoxxy", extractShopContext, optionalAuth, idoxxyAdminRouter);
   app.use("/admin/idoxxy", extractShopContext, optionalAuth, adminIdoxxyRouter);
   app.use("/customers", extractShopContext, optionalAuth, customerGroupsRouter);
+
+  // Public static files - but protect admin folder
+  app.use("/admin", requireAuth, express.static(path.join(process.cwd(), "public", "admin")));
+  app.use(express.static(path.join(process.cwd(), "public")));
   
   // Webhooks don't require auth (they use signature verification)
   app.use("/webhooks", webhooksRouter);

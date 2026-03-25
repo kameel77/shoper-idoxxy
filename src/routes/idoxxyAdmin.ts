@@ -3,9 +3,14 @@ import { z } from "zod";
 
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
+import { emailService } from "../services/emailService";
+import { shopConnectionService } from "../services/shopConnectionService";
 import type { SettingsSnapshot } from "../types/settings";
 
 export const idoxxyAdminRouter = Router();
+
+const firstParam = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
 const idoxxyService = new IdoxxyService();
 
 const pathMappingSchema = z.object({
@@ -28,12 +33,25 @@ const customerGroupsSchema = z.object({
 const bulkActionSchema = z.object({
   action: z.enum(["assign-group", "remove-group", "resend-documents"]).optional(),
   ids: z.array(z.string()),
+  customers: z.array(
+    z.object({
+      id: z.string(),
+      email: z.string(),
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+      groupIds: z.array(z.string()).optional(),
+    })
+  ).optional(),
   groupId: z.string().optional(),
 });
 
 const bulkAddGroupSchema = z.object({
   groupId: z.string().uuid(),
   customerIds: z.array(z.string().uuid()).min(1),
+});
+
+const resendDocumentSchema = z.object({
+  recipients: z.array(z.string()).min(1),
 });
 
 idoxxyAdminRouter.get("/settings", (_req: Request, res: Response) => {
@@ -80,8 +98,19 @@ idoxxyAdminRouter.get("/groups", async (_req: Request, res: Response) => {
 
 idoxxyAdminRouter.get("/customers", async (req: Request, res: Response) => {
   try {
-    const search = typeof req.query.search === "string" ? req.query.search : "";
-    const customers = await idoxxyService.listCustomers(search);
+    const search = typeof req.query.query === "string" ? req.query.query : undefined;
+    const page = typeof req.query.page === "string" ? parseInt(req.query.page, 10) : 1;
+    
+    // API stronicuje od 0, więc odejmujemy 1
+    const params: { search?: string; page: number; size: number } = {
+      page: Math.max(0, page - 1),
+      size: 10,
+    };
+    if (search) {
+      params.search = search;
+    }
+
+    const customers = await idoxxyService.listCustomers(params);
     return res.json(customers);
   } catch (error) {
     const message =
@@ -189,15 +218,143 @@ idoxxyAdminRouter.post("/customers/bulk", async (req: Request, res: Response) =>
     }
 
     if (action === "resend-documents") {
-      // For now, just log - actual document resending would need Idoxxy API integration
-      console.log(`Resending documents to ${ids.length} customers:`, ids);
-      return res.json({ ok: true, updated: ids.length });
+      try {
+        const idoxxyClient = (idoxxyService as any).getClient();
+        const results: Array<{ customerId: string; email?: string; status: string; documents?: string[]; error?: string }> = [];
+
+        // 1. List ALL documents in the Idoxxy account
+        const docsResponse = await idoxxyClient.listDocuments();
+        const allDocuments = docsResponse.content || [];
+        console.info(`[IdoxxyAdmin] Found ${allDocuments.length} documents in Idoxxy`);
+
+        if (allDocuments.length === 0) {
+          return res.json({
+            ok: false,
+            error: "Brak dokumentów w koncie Idoxxy. Nie ma czego wysłać.",
+          });
+        }
+
+        // 2. For each selected customer, match documents by group
+        for (const customerId of ids) {
+          try {
+            const customerData = parsed.data.customers?.find(c => c.id === customerId);
+
+            if (!customerData || !customerData.email) {
+              results.push({ customerId, status: "error", error: "Brak adresu email" });
+              continue;
+            }
+
+            const customerGroupIds = new Set(customerData.groupIds || []);
+
+            // Match documents whose recipients (groups) overlap with customer's groups
+            const matchedDocs = allDocuments.filter((doc: any) =>
+              doc.recipients?.some((recipient: any) => customerGroupIds.has(recipient.id))
+            );
+
+            if (matchedDocs.length === 0) {
+              // If no group match, send ALL documents as fallback
+              console.info(`[IdoxxyAdmin] No group match for ${customerData.email}, sending all ${allDocuments.length} documents`);
+              for (const doc of allDocuments) {
+                await idoxxyService.resendDocumentNotification(doc.id, [customerData.email]);
+              }
+              results.push({
+                customerId,
+                email: customerData.email,
+                status: "sent",
+                documents: allDocuments.map((d: any) => d.documentName),
+              });
+            } else {
+              console.info(`[IdoxxyAdmin] Matched ${matchedDocs.length} documents for ${customerData.email}`);
+              for (const doc of matchedDocs) {
+                await idoxxyService.resendDocumentNotification(doc.id, [customerData.email]);
+              }
+              results.push({
+                customerId,
+                email: customerData.email,
+                status: "sent",
+                documents: matchedDocs.map((d: any) => d.documentName),
+              });
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Nieznany błąd";
+            results.push({ customerId, status: "error", error: message });
+          }
+        }
+
+        const sent = results.filter(r => r.status === "sent").length;
+        const failed = results.filter(r => r.status === "error").length;
+
+        return res.json({
+          ok: true,
+          summary: { sent, failed, total: ids.length },
+          results,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Nieznany błąd wysyłki dokumentów";
+        return res.status(500).json({ ok: false, error: message });
+      }
     }
 
     return res.json({ ok: true, updated: 0 });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Nieznany błąd operacji zbiorczej";
+    return res.status(500).json({ ok: false, error: message });
+  }
+});
+
+// DEBUG: probe Idoxxy API for correct document listing endpoint
+idoxxyAdminRouter.get("/debug/documents", async (_req: Request, res: Response) => {
+  const idoxxyClient = (idoxxyService as any).getClient();
+  const results: Record<string, unknown> = {};
+
+  const pathsToTry = [
+    "/customer/documents/listAll",
+    "/documents/listAll",
+    "/documents/search",
+    "/documents",
+  ];
+
+  for (const path of pathsToTry) {
+    try {
+      const response = await (idoxxyClient as any).authorizedRequest({
+        method: "get",
+        url: path,
+      });
+      results[path] = { status: response.status, data: response.data };
+      console.info(`[DEBUG] ${path} =>`, JSON.stringify(response.data, null, 2));
+    } catch (error: any) {
+      results[path] = { 
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      };
+      console.info(`[DEBUG] ${path} => ERROR ${error.response?.status}:`, error.response?.data);
+    }
+  }
+
+  return res.json({ ok: true, results });
+});
+
+idoxxyAdminRouter.post("/documents/:documentId/resend-notification", async (req: Request, res: Response) => {
+  const documentId = firstParam(req.params.documentId);
+  
+  if (!documentId) {
+    return res.status(400).json({ ok: false, error: "Brak identyfikatora dokumentu" });
+  }
+
+  const parsed = resendDocumentSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, errors: parsed.error.issues });
+  }
+
+  try {
+    // Send using global client
+    await idoxxyService.resendDocumentNotification(documentId, parsed.data.recipients);
+    return res.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Nieznany błąd podczas ponownej wysyłki dokumentu";
     return res.status(500).json({ ok: false, error: message });
   }
 });

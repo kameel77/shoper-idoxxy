@@ -6,6 +6,9 @@ import { CustomerGroupsService } from "../services/customerGroupsService";
 export const customerGroupsRouter = Router();
 const customerGroupsService = new CustomerGroupsService();
 
+const firstParam = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
+
 const bulkAssignSchema = z.object({
   customerIds: z.array(z.string().uuid()).min(1),
 });
@@ -13,7 +16,7 @@ const bulkAssignSchema = z.object({
 customerGroupsRouter.get(
   "/:customerId/groups",
   async (req: Request, res: Response) => {
-    const { customerId } = req.params;
+    const customerId = firstParam(req.params.customerId);
 
     if (!customerId) {
       return res.status(400).json({ ok: false, error: "Brak identyfikatora klienta" });
@@ -33,7 +36,7 @@ customerGroupsRouter.get(
 customerGroupsRouter.post(
   "/groups/:groupId/customers/bulk",
   async (req: Request, res: Response) => {
-    const { groupId } = req.params;
+    const groupId = firstParam(req.params.groupId);
     const parsed = bulkAssignSchema.safeParse(req.body);
 
     if (!groupId) {

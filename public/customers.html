@@ -307,9 +307,10 @@
             ? groups.map(groupName => `<span class="${getGroupColorClass(groupName)}">${groupName}</span>`).join(" ")
             : "-";
 
+          const groupIds = (customer.customerGroups || []).map(g => g.id).join(",");
           const row = document.createElement("tr");
           row.innerHTML = `
-            <td class="checkbox-cell"><input type="checkbox" data-id="${customer.id}" /></td>
+            <td class="checkbox-cell"><input type="checkbox" data-id="${customer.id}" data-email="${customer.email || ""}" data-first="${customer.firstName || ""}" data-last="${customer.lastName || ""}" data-groups="${groupIds}" /></td>
             <td><a href="/customer.html?id=${customer.id}">${name}</a></td>
             <td>${customer.email}</td>
             <td>${groupPills}</td>
@@ -407,9 +408,16 @@
       });
 
       document.getElementById("applyBulk").addEventListener("click", async () => {
-        const ids = Array.from(customersBody.querySelectorAll("input[type='checkbox']:checked")).map(
-          (checkbox) => checkbox.dataset.id
-        );
+        const checkedBoxes = Array.from(customersBody.querySelectorAll("input[type='checkbox']:checked"));
+        const ids = checkedBoxes.map((checkbox) => checkbox.dataset.id);
+        const customers = checkedBoxes.map((checkbox) => ({
+          id: checkbox.dataset.id,
+          email: checkbox.dataset.email,
+          firstName: checkbox.dataset.first || undefined,
+          lastName: checkbox.dataset.last || undefined,
+          groupIds: checkbox.dataset.groups ? checkbox.dataset.groups.split(",").filter(Boolean) : [],
+        }));
+        
         if (!ids.length) {
           bulkStatus.textContent = "Wybierz klientów do akcji zbiorczej.";
           return;
@@ -418,6 +426,7 @@
           const payload = {
             action: bulkAction.value,
             ids,
+            customers,
             groupId: bulkGroup.value || undefined,
           };
           await requestJson("/customers/bulk", {

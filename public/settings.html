@@ -284,10 +284,6 @@
             <input id="linkWorkspaceId" placeholder="UUID workspace" />
             <p class="help">Jeśli token nie jest przypisany do jednego workspace’a, wybierz z listy.</p>
           </div>
-          <div>
-            <label for="linkBaseUrl">Idoxxy Base URL (opcjonalnie)</label>
-            <input id="linkBaseUrl" placeholder="https://api.idoxxy.com" />
-          </div>
         </div>
         <div class="actions">
           <button class="secondary" id="testButton">Testuj połączenie</button>
@@ -298,41 +294,6 @@
         <div style="margin-top:16px;">
           <h3>Powiązane sklepy</h3>
           <div id="connectionsList" class="grid columns-2"></div>
-        </div>
-      </section>
-      <section>
-        <div class="grid columns-2">
-          <div>
-            <h2>Połączenie API</h2>
-            <p class="help">
-              Wprowadź klucz API, który otrzymasz w panelu Idoxxy. Po zapisaniu
-              możesz przetestować połączenie.
-            </p>
-          </div>
-          <div class="status" id="connectionStatus">
-            Status połączenia: niezweryfikowany
-          </div>
-        </div>
-        <form id="credentialsForm" class="grid columns-2">
-          <div>
-            <label for="baseUrl">Adres API Idoxxy</label>
-            <input
-              id="baseUrl"
-              name="baseUrl"
-              type="url"
-              placeholder="https://api.idoxxy.com"
-              value="https://api.idoxxy.com"
-              required
-            />
-          </div>
-          <div>
-            <label for="apiKey">X-API-KEY</label>
-            <input id="apiKey" name="apiKey" type="password" placeholder="••••••" required />
-          </div>
-        </form>
-        <div class="actions">
-          <button type="button" class="primary" id="saveCredentials">Zapisz poświadczenia</button>
-          <button type="button" class="secondary" id="testConnection">Testuj połączenie</button>
         </div>
       </section>
 
@@ -399,8 +360,6 @@
     </main>
     <script>
       const apiBase = "";
-      const connectionStatus = document.getElementById("connectionStatus");
-      const credentialsForm = document.getElementById("credentialsForm");
       const fallbackRegistration = document.getElementById("fallbackRegistration");
       const fallbackOrder = document.getElementById("fallbackOrder");
       const mappingsBody = document.getElementById("mappingsBody");
@@ -410,42 +369,10 @@
       const linkShopUrl = document.getElementById("linkShopUrl");
       const linkToken = document.getElementById("linkToken");
       const linkWorkspaceId = document.getElementById("linkWorkspaceId");
-      const linkBaseUrl = document.getElementById("linkBaseUrl");
       const linkStatus = document.getElementById("linkStatus");
       const connectionsList = document.getElementById("connectionsList");
+      // Auto-extract logic removed as per user request (Issue 3)
 
-      // Auto-extract shop ID from URL
-      const extractShopIdFromUrl = (url) => {
-        if (!url) return "";
-        try {
-          const urlObj = new URL(url);
-          // Extract shop ID from subdomain (e.g., devshop-144794.shoparena.pl -> devshop-144794)
-          const match = urlObj.hostname.match(/^([^.]+)\./);
-          return match ? match[1] : "";
-        } catch (error) {
-          return "";
-        }
-      };
-
-      // Update shop ID when URL changes
-      linkShopUrl.addEventListener("input", (event) => {
-        const url = event.target.value.trim();
-        const extractedId = extractShopIdFromUrl(url);
-        if (extractedId && !linkShopId.value) {
-          linkShopId.value = extractedId;
-        }
-      });
-
-      // Also update on paste
-      linkShopUrl.addEventListener("paste", (event) => {
-        setTimeout(() => {
-          const url = event.target.value.trim();
-          const extractedId = extractShopIdFromUrl(url);
-          if (extractedId && !linkShopId.value) {
-            linkShopId.value = extractedId;
-          }
-        }, 0);
-      });
 
       let cachedGroups = [];
       let cachedDocuments = [];
@@ -475,26 +402,6 @@
         }
       };
 
-      const setStatus = (message, type) => {
-        connectionStatus.textContent = message;
-        connectionStatus.className = `status ${type || ""}`;
-      };
-      const setConnectionStatus = (state) => {
-        const statusTextMap = {
-          unknown: "Status połączenia: niezweryfikowany",
-          ok: "Status połączenia: zweryfikowany",
-          error: "Status połączenia: brak połączenia",
-        };
-        const classMap = {
-          unknown: "",
-          ok: "ok",
-          error: "error",
-        };
-        connectionStatus.textContent = statusTextMap[state] ?? statusTextMap.unknown;
-        connectionStatus.className = `status ${classMap[state] ?? ""}`;
-      };
-      setConnectionStatus("unknown");
-
       const setLinkStatus = (message, type = "") => {
         linkStatus.textContent = message;
         linkStatus.className = `status ${type}`;
@@ -504,6 +411,21 @@
         if (!items || items.length === 0) {
           connectionsList.innerHTML = '<p class="muted">Brak zapisanych połączeń.</p>';
           return;
+        }
+
+        // Fill initial values in the form from the most recently verified connection
+        const sortedItems = [...items]
+          .sort((a, b) => (b.tokenLastVerifiedAt || 0) - (a.tokenLastVerifiedAt || 0));
+        const activeLinked = sortedItems.find((c) => c.status === "linked") || sortedItems[0];
+        
+        if (activeLinked && !linkShopId.value) {
+          linkShopId.value = activeLinked.shopId || "";
+          linkShopUrl.value = activeLinked.shopUrl || "";
+          linkWorkspaceId.value = activeLinked.idoxxyWorkspaceId || "";
+          if (activeLinked.status === "linked") {
+            linkToken.placeholder = "Nadpisz nowym lub zostaw aby zachować obecny";
+            linkToken.value = "***********";
+          }
         }
 
         connectionsList.innerHTML = items
@@ -665,12 +587,6 @@
           cachedGroups = groups.items || [];
           cachedDocuments = documents.items || [];
 
-          if (config.credentials) {
-            credentialsForm.baseUrl.value = config.credentials.baseUrl || "https://api.idoxxy.com";
-            credentialsForm.apiKey.value = config.credentials.apiKey || "";
-            setConnectionStatus(config.credentials.apiKey ? "ok" : "unknown");
-          }
-
           fillSelectOptions(
             fallbackRegistration,
             cachedGroups,
@@ -695,42 +611,7 @@
         }
       };
 
-      document.getElementById("saveCredentials").addEventListener("click", async (event) => {
-        event.preventDefault();
-        try {
-          const apiKeyValue = credentialsForm.apiKey.value.trim();
-          const payload = {
-            baseUrl: credentialsForm.baseUrl.value.trim(),
-          };
-          if (apiKeyValue) {
-            payload.apiKey = apiKeyValue;
-          }
-          await requestJson("/settings/credentials", {
-            method: "PUT",
-            body: JSON.stringify(payload),
-          });
-          setStatus("Poświadczenia zapisane.", "ok");
-          setConnectionStatus(apiKeyValue ? "ok" : "unknown");
-          // Reload settings to show updated timestamp
-          await loadSettings();
-        } catch (error) {
-          setStatus("Nie udało się zapisać poświadczeń.", "error");
-          setConnectionStatus("error");
-        }
-      });
 
-      document.getElementById("testConnection").addEventListener("click", async (event) => {
-        event.preventDefault();
-        setStatus("Testowanie połączenia...", "");
-        try {
-          await requestJson("/settings/test-connection");
-          setStatus("Połączenie poprawne.", "ok");
-          setConnectionStatus("ok");
-        } catch (error) {
-          setStatus("Błąd połączenia z API.", "error");
-          setConnectionStatus("error");
-        }
-      });
 
       document.getElementById("saveFallback").addEventListener("click", async (event) => {
         event.preventDefault();
@@ -802,26 +683,17 @@
             if (response.mapping?.id) {
               row.dataset.id = response.mapping.id;
             }
-            setStatus("Mapowanie zapisane.", "ok");
             // Reload settings to show updated timestamp
             await loadSettings();
           } catch (error) {
-            setStatus("Nie udało się zapisać mapowania.", "error");
+            console.error("Nie udało się zapisać mapowania.", error);
           }
         }
       });
 
       document.getElementById("saveAll").addEventListener("click", async () => {
         try {
-          const apiKeyValue = credentialsForm.apiKey.value.trim();
           await Promise.all([
-            requestJson("/settings/credentials", {
-              method: "PUT",
-              body: JSON.stringify({
-                baseUrl: credentialsForm.baseUrl.value.trim(),
-                apiKey: apiKeyValue || "",
-              }),
-            }),
             requestJson("/settings/default-groups", {
               method: "PUT",
               body: JSON.stringify({
@@ -830,29 +702,28 @@
               }),
             }),
           ]);
-          setStatus("Zmiany zapisane.", "ok");
           // Reload settings to show updated timestamp
           await loadSettings();
+          alert("Zmiany zapisane.");
         } catch (error) {
-          setStatus("Nie udało się zapisać wszystkich zmian.", "error");
+          alert("Nie udało się zapisać wszystkich zmian.");
         }
       });
 
       document.getElementById("cancelAll").addEventListener("click", () => {
         loadSettings();
-        setStatus("Przywrócono dane z serwera.", "");
       });
 
       document.getElementById("testButton").addEventListener("click", async () => {
+        const rawToken = linkToken.value.trim();
         const payload = {
           shopId: linkShopId.value.trim(),
           shopUrl: linkShopUrl.value.trim() || undefined,
-          token: linkToken.value.trim(),
-          baseUrl: linkBaseUrl.value.trim() || undefined,
+          token: (rawToken && rawToken !== "***********") ? rawToken : undefined,
         };
 
-        if (!payload.shopId || !payload.token) {
-          setLinkStatus("Podaj shopId i token Idoxxy", "error");
+        if (!payload.shopId) {
+          setLinkStatus("Podaj shopId (wymagane) oraz opcjonalnie nowy token", "error");
           return;
         }
 
@@ -870,16 +741,16 @@
       });
 
       document.getElementById("connectButton").addEventListener("click", async () => {
+        const rawToken = linkToken.value.trim();
         const payload = {
           shopId: linkShopId.value.trim(),
           shopUrl: linkShopUrl.value.trim() || undefined,
-          token: linkToken.value.trim(),
+          token: (rawToken && rawToken !== "***********") ? rawToken : undefined,
           workspaceId: linkWorkspaceId.value.trim() || undefined,
-          baseUrl: linkBaseUrl.value.trim() || undefined,
         };
 
-        if (!payload.shopId || !payload.token) {
-          setLinkStatus("Podaj shopId i token Idoxxy", "error");
+        if (!payload.shopId) {
+          setLinkStatus("Podaj shopId (wymagane) oraz opcjonalnie nowy token", "error");
           return;
         }
 

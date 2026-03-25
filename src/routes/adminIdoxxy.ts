@@ -5,9 +5,13 @@ import { z } from "zod";
 
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
+import { emailService } from "../services/emailService";
 
 const idoxxyService = new IdoxxyService();
 export const adminIdoxxyRouter = Router();
+
+const firstParam = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
 
 const credentialsSchema = z.object({
   apiKey: z.string().min(1),
@@ -46,6 +50,10 @@ const bulkActionSchema = z.object({
 
 const customerGroupSchema = z.object({
   groupIds: z.array(z.string().uuid()),
+});
+
+const resendDocumentSchema = z.object({
+  recipients: z.array(z.string()).min(1),
 });
 
 type Group = { id: string; name: string };
@@ -153,7 +161,7 @@ adminIdoxxyRouter.post("/settings/mappings", (req: Request, res: Response) => {
 });
 
 adminIdoxxyRouter.delete("/settings/mappings/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = firstParam(req.params.id);
 
   if (!id) {
     return res.status(400).json({ ok: false, error: "Brak identyfikatora mapowania" });
@@ -296,4 +304,20 @@ adminIdoxxyRouter.post("/customers/bulk", (req: Request, res: Response) => {
     }
 
   return res.json({ ok: true, updated: selectedCustomers.length });
+});
+
+adminIdoxxyRouter.post("/documents/:documentId/resend-notification", (req: Request, res: Response) => {
+  const { documentId } = req.params;
+
+  if (!documentId) {
+    return res.status(400).json({ ok: false, error: "Brak identyfikatora dokumentu" });
+  }
+
+  const parsed = resendDocumentSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, errors: parsed.error.issues });
+  }
+
+  return res.json({ ok: true });
 });
