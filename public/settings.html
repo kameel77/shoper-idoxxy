@@ -796,16 +796,21 @@
     <script src="https://dcsaas.net/js/appstore-popup.js"></script>
     <script>
       // Zmuszenie iframa Shopera (Warstwy) do rozszerzenia się z domyślnych 300x150px do pełnego rozmiaru
-      window.addEventListener('load', function() {
+      const initShoperIframe = function() {
         if (typeof ShopApp !== 'undefined' && ShopApp.Ajax && ShopApp.Ajax.window) {
           try {
-            ShopApp.Ajax.window.show(); // Tell Shoper to remove the 'hide' class
             ShopApp.Ajax.window.resize(1200, 900);
           } catch(e) {
             console.error("Shoper SDK resize failed", e);
           }
         }
-      });
+      };
+      
+      // Attempt resize immediately in case script is already loaded
+      initShoperIframe();
+      
+      // Also attempt on window load to ensure everything is initialized
+      window.addEventListener('load', initShoperIframe);
     </script>
   </body>
 </html>
