@@ -50,13 +50,17 @@ const eventMappingSchema = z.object({
 });
 
 const linkTestSchema = z.object({
-  shopId: z.string().min(1),
+  shopId: z.string(),
   shopUrl: z.string().url().optional(),
-  token: z.string().min(1),
-  baseUrl: z.string().url().optional(),
+  token: z.string().optional(),
+  baseUrl: z.string().optional(),
 });
 
-const linkSaveSchema = linkTestSchema.extend({
+const linkSaveSchema = z.object({
+  shopId: z.string(),
+  shopUrl: z.string().optional(),
+  token: z.string().optional(),
+  baseUrl: z.string().optional(),
   workspaceId: z.string().optional(),
 });
 
@@ -214,8 +218,14 @@ settingsRouter.post("/link/test", async (req: Request, res: Response) => {
   const { shopId, shopUrl, token, baseUrl } = parsed.data;
   shopConnectionService.registerInstallation(shopId, shopUrl);
 
+  const actualToken = token || shopConnectionService.getToken(shopId);
+
+  if (!actualToken) {
+    return res.status(400).json({ ok: false, error: "Brak zdefiniowanego tokenu. Wprowadź go w formularzu." });
+  }
+
   try {
-    const result = await idoxxyService.testToken(token, baseUrl);
+    const result = await idoxxyService.testToken(actualToken, baseUrl);
     shopConnectionService.markVerified(shopId);
     return res.json({ ok: true, me: result.payload });
   } catch (error) {
@@ -239,15 +249,21 @@ settingsRouter.post("/link", async (req: Request, res: Response) => {
 
   shopConnectionService.registerInstallation(shopId, shopUrl);
 
+  const actualToken = token || shopConnectionService.getToken(shopId);
+
+  if (!actualToken) {
+    return res.status(400).json({ ok: false, error: "Brak zdefiniowanego tokenu. Wprowadź go w formularzu." });
+  }
+
   try {
-    const result = await idoxxyService.testToken(token, baseUrl);
+    const result = await idoxxyService.testToken(actualToken, baseUrl);
 
     const connection = shopConnectionService.saveLink({
       shopId,
       shopUrl: shopUrl || undefined,
       idoxxyBaseUrl: baseUrl || undefined,
       idoxxyWorkspaceId: workspaceId || undefined,
-      token,
+      token: actualToken,
       status: "linked",
       tokenLastVerifiedAt: Date.now(),
     });

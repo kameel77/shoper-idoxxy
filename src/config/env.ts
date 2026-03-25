@@ -21,6 +21,15 @@ const envSchema = z.object({
   SHOPER_CLIENT_SECRET: z.string().optional(),
   SHOPER_WEBHOOK_SECRET: z.string().optional(),
   SESSION_SECRET: z.string().min(32).default("change-this-secret-in-production-to-at-least-32-characters"),
+  // Email configuration
+  EMAIL_PROVIDER: z.enum(["sendgrid", "smtp", "console"]).default("console"),
+  SENDGRID_API_KEY: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional().transform((v) => v ? Number(v) : 587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().email().default("noreply@shoper-idoxxy.local"),
+  EMAIL_FROM_NAME: z.string().default("Shoper Idoxxy Integration"),
 });
 
 export type Env = z.infer<typeof envSchema>;

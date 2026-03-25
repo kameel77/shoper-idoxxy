@@ -122,9 +122,9 @@ class SettingsRepository {
     if (payload.baseUrl) {
       this.setSetting("idoxxy_base_url", payload.baseUrl);
     }
-    if (payload.apiKey !== undefined) {
+    if (payload.apiKey !== undefined && payload.apiKey !== "") {
       this.setSetting("idoxxy_api_key", payload.apiKey);
-    } else if (payload.idoxxyApiKey !== undefined) {
+    } else if (payload.idoxxyApiKey !== undefined && payload.idoxxyApiKey !== "") {
       this.setSetting("idoxxy_api_key", payload.idoxxyApiKey);
     }
     if (payload.shoperApiKey) {

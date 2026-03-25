@@ -125,7 +125,12 @@ export class IdoxxyClient {
       };
 
       // eslint-disable-next-line no-console
-      console.info("[Idoxxy] Request", { method, url });
+      console.info("[Idoxxy] Request", { 
+        method, 
+        url,
+        params: config.params,
+        data: config.data
+      });
       return config;
     });
 
@@ -414,31 +419,61 @@ export class IdoxxyClient {
     });
   }
 
-  async getCustomerDocuments(customerEmail: string) {
+  async listDocuments(params?: { page?: number; size?: number }) {
     const response = await this.authorizedRequest<{
-      content?: Array<{
-        companyName: string;
-        documents: Array<{
+      content: Array<{
+        id: string;
+        documentName: string;
+        documentType: string;
+        currentVersion?: {
           id: string;
-          documentName: string;
-          documentType: string;
-          currentVersion?: {
-            id: string;
-            validFrom: string;
-            validTo?: string;
-            versionStatus: string;
-            uniqueLink: string;
-          };
-          versions: Array<{
-            id: string;
-            validFrom: string;
-            validTo?: string;
-            versionStatus: string;
-            uniqueLink: string;
-          }>;
+          validFrom: string;
+          validTo: string | null;
+          versionStatus: string;
+          fileId: string;
+          documentId: string;
+        };
+        recipients: Array<{
+          id: string;
+          name: string;
+        }>;
+        createdAt: string;
+        updatedAt: string | null;
+      }>;
+      totalElements?: number;
+      totalPages?: number;
+    }>({
+      method: "get",
+      url: "/documents/listAll",
+      ...(params ? { params } : {}),
+    });
+
+    return response.data;
+  }
+
+  async getCustomerDocuments(customerEmail: string) {
+    const response = await this.authorizedRequest<Array<{
+      companyName: string;
+      documents: Array<{
+        id: string;
+        documentName: string;
+        documentType: string;
+        currentVersion?: {
+          id: string;
+          validFrom: string;
+          validTo?: string;
+          versionStatus: string;
+          uniqueLink: string;
+        };
+        versions: Array<{
+          id: string;
+          validFrom: string;
+          validTo?: string;
+          versionStatus: string;
+          uniqueLink: string;
         }>;
       }>;
-    }>({
+    }>>({
       method: "get",
       url: "/customer/documents/listAll",
       params: { searchQuery: customerEmail },
@@ -452,6 +487,16 @@ export class IdoxxyClient {
       method: "put",
       url: `/documents/${documentId}/assign-group`,
       data: { groupIds, customerIds },
+    });
+
+    return response.data;
+  }
+
+  async resendDocumentNotification(documentId: string, recipients: string[]) {
+    const response = await this.authorizedRequest<Record<string, unknown>>({
+      method: "post",
+      url: `/documents/${documentId}/resend-notification`,
+      data: recipients,
     });
 
     return response.data;

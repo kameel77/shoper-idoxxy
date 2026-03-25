@@ -123,11 +123,9 @@ export class IdoxxyService {
     );
   }
 
-  async listCustomers(search?: string, client?: IdoxxyClient) {
+  async listCustomers(params?: { search?: string; page?: number; size?: number }, client?: IdoxxyClient) {
     const clientToUse = client ?? this.getClient();
-    return clientToUse.listCustomersWithGroups(
-      search ? { search } : undefined,
-    );
+    return clientToUse.listCustomersWithGroups(params);
   }
 
   async getCustomerGroups(customerId: string, client?: IdoxxyClient) {
@@ -172,5 +170,10 @@ export class IdoxxyService {
   async assignDocumentToGroup(documentId: string, groupIds: string[], customerIds: string[], client?: IdoxxyClient) {
     const clientToUse = client ?? this.getClient();
     return clientToUse.assignDocumentToGroup(documentId, groupIds, customerIds);
+  }
+
+  async resendDocumentNotification(documentId: string, recipients: string[], client?: IdoxxyClient) {
+    const clientToUse = client ?? this.getClient();
+    return clientToUse.resendDocumentNotification(documentId, recipients);
   }
 }

@@ -2588,6 +2588,58 @@
                 ]
             }
         },
+        "/customer/documents/{documentId}/resend-notification": {
+            "post": {
+                "tags": [
+                    "customer-document-controller"
+                ],
+                "operationId": "resendDocumentNotification",
+                "parameters": [
+                    {
+                        "name": "documentId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "customerEmail",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "404": {
+                        "description": "Not Found"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "main": []
+                    },
+                    {
+                        "AccountApiKeyAuth": []
+                    }
+                ]
+            }
+        },
         "/customer/activate": {
             "get": {
                 "tags": [
