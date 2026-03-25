@@ -95,6 +95,10 @@ export class ShopConnectionService {
     return shopConnectionRepository.revoke(shopId, revokedBy);
   }
 
+  deleteConnection(shopId: string): boolean {
+    return shopConnectionRepository.delete(shopId);
+  }
+
   getToken(shopId: string) {
     const connection = this.getConnection(shopId);
     if (!connection?.idoxxyTokenEncrypted) return undefined;

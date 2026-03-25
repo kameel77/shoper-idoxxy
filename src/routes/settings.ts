@@ -286,6 +286,21 @@ settingsRouter.post("/link", async (req: Request, res: Response) => {
   }
 });
 
+settingsRouter.delete("/link/:shopId", (req: Request, res: Response) => {
+  const shopId = firstParam(req.params.shopId);
+
+  if (!shopId) {
+    return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu" });
+  }
+
+  const deleted = shopConnectionService.deleteConnection(shopId);
+  if (!deleted) {
+    return res.status(404).json({ ok: false, error: "Połączenie dla sklepu nie istnieje" });
+  }
+
+  return res.json({ ok: true });
+});
+
 settingsRouter.get("/sync-logs", (_req: Request, res: Response) => {
   const logs = settingsRepository.getSyncLogs();
   res.json({ items: logs });

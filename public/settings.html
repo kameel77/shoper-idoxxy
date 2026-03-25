@@ -2,7 +2,7 @@
 <html lang="pl">
   <head>
     <meta charset="utf-8" />
-    <title>Shoper ↔ Idoxxy – Ustawienia</title>
+    <title>Shoper ↔ iDoxxy – Ustawienia</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
       :root {
@@ -176,16 +176,39 @@
         letter-spacing: 0.04em;
         color: #52606d;
       }
-      .pill {
+      .stat-bar {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #475569;
+        overflow: hidden;
+      }
+      .stat-bar .stat-item {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: #eef2ff;
-        color: #4338ca;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 12px;
+        padding: 6px 14px;
+        border-right: 1px solid #e2e8f0;
+      }
+      .stat-bar .stat-item:last-child {
+        border-right: none;
+      }
+      .stat-bar .stat-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .stat-bar .stat-dot.total { background: #94a3b8; }
+      .stat-bar .stat-dot.active { background: #22c55e; }
+      .stat-bar .stat-dot.disabled { background: #f87171; }
+      .stat-bar .stat-value {
         font-weight: 600;
+        color: #1e293b;
       }
       .footer-actions {
         position: sticky;
@@ -240,9 +263,9 @@
   </head>
   <body>
     <header>
-      <h1>Integracja Shoper ↔ Idoxxy</h1>
+      <h1>Integracja Shoper ↔ iDoxxy</h1>
       <p>
-        Skonfiguruj połączenie z Idoxxy, wybierz domyślne grupy oraz ustaw reguły
+        Skonfiguruj połączenie z iDoxxy, wybierz domyślne grupy oraz ustaw reguły
         mapowania zdarzeń. Dane są zapisywane w panelu administracyjnym Shoper i
         wykorzystywane do automatycznych synchronizacji.
       </p>
@@ -252,16 +275,15 @@
         <li><a href="/">Start</a></li>
         <li><a href="/settings" class="active">Panel ustawień</a></li>
         <li><a href="/customers.html">Klienci</a></li>
-        <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
         <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
-        <li style="margin-left: auto;"><a href="#" id="logoutBtn" style="color: #fca5a5;">Wyloguj</a></li>
+
       </ul>
     </nav>
     <main>
       <section id="linking">
-        <h2>Połącz sklep z Idoxxy (token-first)</h2>
+        <h2>Połącz sklep z iDoxxy (token-first)</h2>
         <p class="muted">
-          Wygeneruj token w Idoxxy (zakres: dostęp do workspace’a) i wklej go tutaj, aby powiązać
+          Wygeneruj token w iDoxxy (zakres: dostęp do workspace’a) i wklej go tutaj, aby powiązać
           sklep Shoper z workspace’em. Backend zweryfikuje token przez <code>/details/me</code>.
         </p>
         <div class="grid columns-2">
@@ -275,7 +297,7 @@
             <input id="linkShopUrl" placeholder="https://twoj-sklep.shoper.pl" />
           </div>
           <div>
-            <label for="linkToken">Token Idoxxy</label>
+            <label for="linkToken">Token iDoxxy</label>
             <input id="linkToken" placeholder="Bearer / API Key" />
             <p class="help">Przechowywany tylko serwerowo (placeholder szyfrowania).</p>
           </div>
@@ -323,7 +345,7 @@
           <div>
             <h2>Mapowania zdarzeń Shoper</h2>
             <p class="help">
-              Zdefiniuj reguły przypisujące zdarzenia do grup Idoxxy i dokumentów.
+              Zdefiniuj reguły przypisujące zdarzenia do grup iDoxxy i dokumentów.
               Priorytety niższe są wykonywane jako pierwsze.
             </p>
           </div>
@@ -445,6 +467,7 @@
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   <strong>${c.shopId}</strong>
                   <span class="badge">${c.status}</span>
+                  <button class="danger" style="margin-left:auto;padding:4px 10px;font-size:12px;" data-delete-shop="${c.shopId}">Usuń</button>
                 </div>
                 <div class="muted" style="margin-top:6px;">Workspace: ${c.idoxxyWorkspaceId ?? "–"}</div>
                 <div class="muted">Base URL: ${c.idoxxyBaseUrl ?? "default"}</div>
@@ -453,6 +476,21 @@
             `;
           })
           .join("");
+
+        // Attach delete handlers
+        connectionsList.querySelectorAll("[data-delete-shop]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const shopId = btn.dataset.deleteShop;
+            if (!confirm(`Czy na pewno chcesz usunąć powiązanie sklepu ${shopId}?`)) return;
+            try {
+              await requestJson(`/settings/link/${shopId}`, { method: "DELETE" });
+              setLinkStatus(`Usunięto powiązanie sklepu ${shopId}`, "ok");
+              await loadConnections();
+            } catch (error) {
+              setLinkStatus(error.message || "Nie udało się usunąć powiązania", "error");
+            }
+          });
+        });
       };
 
       const loadConnections = async () => {
@@ -486,16 +524,14 @@
         mappingStats.innerHTML = "";
         const active = mappings.filter((mapping) => mapping.enabled).length;
         const disabled = mappings.length - active;
-        const total = document.createElement("span");
-        total.className = "pill";
-        total.textContent = `Łącznie: ${mappings.length}`;
-        const activePill = document.createElement("span");
-        activePill.className = "pill";
-        activePill.textContent = `Aktywne: ${active}`;
-        const disabledPill = document.createElement("span");
-        disabledPill.className = "pill";
-        disabledPill.textContent = `Wyłączone: ${disabled}`;
-        mappingStats.append(total, activePill, disabledPill);
+        const bar = document.createElement("div");
+        bar.className = "stat-bar";
+        bar.innerHTML = `
+          <span class="stat-item"><span class="stat-dot total"></span>Łącznie: <span class="stat-value">${mappings.length}</span></span>
+          <span class="stat-item"><span class="stat-dot active"></span>Aktywne: <span class="stat-value">${active}</span></span>
+          <span class="stat-item"><span class="stat-dot disabled"></span>Wyłączone: <span class="stat-value">${disabled}</span></span>
+        `;
+        mappingStats.appendChild(bar);
       };
 
       const renderMappings = (mappings) => {
@@ -723,14 +759,20 @@
 
       document.getElementById("testButton").addEventListener("click", async () => {
         const rawToken = linkToken.value.trim();
+        const hasExistingToken = rawToken === "***********";
         const payload = {
           shopId: linkShopId.value.trim(),
           shopUrl: linkShopUrl.value.trim() || undefined,
-          token: (rawToken && rawToken !== "***********") ? rawToken : undefined,
+          token: (rawToken && !hasExistingToken) ? rawToken : undefined,
         };
 
         if (!payload.shopId) {
-          setLinkStatus("Podaj shopId (wymagane) oraz opcjonalnie nowy token", "error");
+          setLinkStatus("Podaj shopId (wymagane) oraz token i Doxxy", "error");
+          return;
+        }
+
+        if (!payload.token && !hasExistingToken) {
+          setLinkStatus("Podaj token iDoxxy (wymagane do testowania połączenia)", "error");
           return;
         }
 
@@ -761,13 +803,13 @@
           return;
         }
 
-        setLinkStatus("Łączę sklep z Idoxxy...", "");
+        setLinkStatus("Łączę sklep z iDoxxy...", "");
         try {
           await requestJson("/settings/link", {
             method: "POST",
             body: JSON.stringify(payload),
           });
-          setLinkStatus("Połączono sklep z Idoxxy", "ok");
+          setLinkStatus("Połączono sklep z iDoxxy", "ok");
           await loadConnections();
         } catch (error) {
           setLinkStatus(error.message || "Nie udało się połączyć", "error");
@@ -782,16 +824,7 @@
       loadSettings();
       loadConnections();
 
-      // Logout handler
-      document.getElementById("logoutBtn").addEventListener("click", async (e) => {
-        e.preventDefault();
-        try {
-          await requestJson("/auth/logout", { method: "POST" });
-          window.location.href = "/login.html";
-        } catch (error) {
-          console.error("Logout error:", error);
-        }
-      });
+
     </script>
     <script src="https://dcsaascdn.net/js/dc-sdk-1.0.5.min.js"></script>
     <script>

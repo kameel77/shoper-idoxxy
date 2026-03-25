@@ -209,6 +209,11 @@ export class ShopConnectionRepository {
     return updated;
   }
 
+  delete(shopId: string): boolean {
+    const result = deleteConnectionStmt.run(shopId);
+    return result.changes > 0;
+  }
+
   private getOrThrow(shopId: string) {
     const found = this.get(shopId);
     if (!found) {
