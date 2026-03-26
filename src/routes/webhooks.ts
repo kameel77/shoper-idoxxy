@@ -105,13 +105,57 @@ const mappingMatchesPayload = (mapping: EventMapping, payload: unknown) => {
 };
 
 const resolveShopId = (req: Request): string | undefined => {
+  // 1. Try explicit shop ID headers
   const headerId =
     req.header("X-Shoper-Shop-Id") ||
     req.header("X-Shop-Id") ||
     req.header("X-Shop") ||
     req.header("X-Shop-Url");
   const bodyId = (req.body as any)?.shop_id ?? (req.body as any)?.shopId;
-  return (headerId ?? bodyId)?.toString();
+  const explicit = (headerId ?? bodyId)?.toString();
+  if (explicit) return explicit;
+
+  // 2. Shoper sends x-shop-domain header (e.g. "devshop-144794.shoparena.pl")
+  //    Match it against stored shopUrl in connections
+  const shopDomain = req.header("X-Shop-Domain");
+  if (shopDomain) {
+    const allConnections = shopConnectionService.listConnections();
+    const matched = allConnections.find((c) => {
+      if (!c.shopUrl) return false;
+      const connHost = c.shopUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      return connHost === shopDomain;
+    });
+    if (matched) {
+      console.log(`[Webhooks] Resolved shopId=${matched.shopId} from x-shop-domain=${shopDomain}`);
+      return matched.shopId;
+    }
+    // If no match by URL, use the domain itself as shopId
+    console.log(`[Webhooks] Using x-shop-domain as shopId: ${shopDomain}`);
+    return shopDomain;
+  }
+
+  // 3. Try to match Origin/Referer to a known shop URL
+  const origin = req.header("Origin") || req.header("Referer");
+  if (origin) {
+    const originHost = origin.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    const allConnections = shopConnectionService.listConnections();
+    const matched = allConnections.find((c) => {
+      if (!c.shopUrl) return false;
+      const connHost = c.shopUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      return connHost === originHost;
+    });
+    if (matched) return matched.shopId;
+  }
+
+  // 4. Fallback: if only one linked shop exists, use it (single-tenant mode)
+  const allConnections = shopConnectionService.listConnections();
+  const linkedConnections = allConnections.filter((c) => c.status === "linked");
+  if (linkedConnections.length === 1 && linkedConnections[0]) {
+    console.log(`[Webhooks] Auto-resolved shopId=${linkedConnections[0].shopId} (single linked shop)`);
+    return linkedConnections[0].shopId;
+  }
+
+  return undefined;
 };
 
 const handleAuthError = (shopId: string, error: unknown) => {
@@ -207,23 +251,38 @@ webhooksRouter.post(
   "/shoper/customer-created",
   verifyShoperSignature,
   async (req: Request, res: Response) => {
-    console.log("[Webhooks] customer-created HEADERS:", JSON.stringify(req.headers, null, 2));
-    console.log("[Webhooks] customer-created BODY:", JSON.stringify(req.body, null, 2));
+
     const startTime = Date.now();
     const shopId = resolveShopId(req);
     if (!shopId) {
       return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu w webhooku." });
     }
-    const parsed = customerCreatedSchema.safeParse(req.body);
+
+    // Shoper sends customer flat: { user_id, email, firstname, lastname, ... }
+    // Normalize to our expected format: { customer: { id, email, first_name, last_name } }
+    const rawBody = req.body as Record<string, unknown>;
+    const normalizedBody = rawBody.customer
+      ? rawBody  // Already in { customer: {...} } format
+      : {
+          customer: {
+            id: rawBody.user_id ?? rawBody.id,
+            email: rawBody.email,
+            first_name: rawBody.firstname ?? rawBody.first_name,
+            last_name: rawBody.lastname ?? rawBody.last_name,
+          },
+        };
+
+    const parsed = customerCreatedSchema.safeParse(normalizedBody);
 
     if (!parsed.success) {
+      console.error("[Webhooks] customer-created validation failed:", parsed.error.issues, "raw keys:", Object.keys(rawBody));
       settingsRepository.addSyncLog({
         event: "customer.created",
         source: "webhook",
         customerId: undefined,
-        customerEmail: undefined,
+        customerEmail: (rawBody.email as string) || undefined,
         orderId: undefined,
-        shoperCustomerId: req.body?.customer?.id?.toString(),
+        shoperCustomerId: (rawBody.user_id ?? rawBody.id ?? (rawBody.customer as any)?.id)?.toString(),
         action: "sync-customer",
         status: "error",
         details: {
@@ -395,23 +454,42 @@ webhooksRouter.post(
   "/shoper/order-created",
   verifyShoperSignature,
   async (req: Request, res: Response) => {
-    console.log("[Webhooks] order-created HEADERS:", JSON.stringify(req.headers, null, 2));
-    console.log("[Webhooks] order-created BODY:", JSON.stringify(req.body, null, 2));
+
     const startTime = Date.now();
     const shopId = resolveShopId(req);
     if (!shopId) {
       return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu w webhooku." });
     }
-    const parsed = orderCreatedSchema.safeParse(req.body);
+
+    // Shoper sends the order object flat: { order_id, email, billingAddress: { firstname, lastname }, ... }
+    // Normalize to our expected format: { order: { id, email }, customer: { email, first_name, last_name } }
+    const rawBody = req.body as Record<string, unknown>;
+    const billingAddr = (rawBody.billingAddress ?? rawBody.billing_address) as Record<string, unknown> | undefined;
+    const normalizedBody = rawBody.order
+      ? rawBody  // Already in { order: {...} } format
+      : {
+          order: {
+            id: rawBody.order_id ?? rawBody.id,
+            email: rawBody.email ?? billingAddr?.email,
+          },
+          customer: {
+            email: rawBody.email ?? billingAddr?.email,
+            first_name: billingAddr?.firstname ?? billingAddr?.first_name ?? rawBody.firstname,
+            last_name: billingAddr?.lastname ?? billingAddr?.last_name ?? rawBody.lastname,
+          },
+        };
+
+    const parsed = orderCreatedSchema.safeParse(normalizedBody);
 
     if (!parsed.success) {
+      console.error("[Webhooks] order-created validation failed:", parsed.error.issues, "raw keys:", Object.keys(rawBody));
       settingsRepository.addSyncLog({
         event: "order.created",
         source: "webhook",
         customerId: undefined,
         customerEmail: undefined,
-        orderId: req.body?.order?.id?.toString(),
-        shoperCustomerId: req.body?.customer?.id?.toString(),
+        orderId: (rawBody.order_id ?? rawBody.id ?? (rawBody.order as any)?.id)?.toString(),
+        shoperCustomerId: (rawBody.customer as any)?.id?.toString(),
         action: "sync-customer",
         status: "error",
         details: {
