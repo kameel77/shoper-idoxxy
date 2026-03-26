@@ -94,13 +94,23 @@ settingsRouter.get("/", async (req: Request, res: Response) => {
         return res.sendFile(path.join(process.cwd(), "public/settings.html"));
       }
 
-      // Exchange auth_code for OAuth tokens
+      console.log(`[Settings Install] Exchanging auth_code for ${cleanShopUrl} with clientId=${clientId.substring(0, 8)}...`);
+
+      // Exchange auth_code for OAuth tokens (same as install.ts)
       const tokenResponse = await axios.post(
         `https://${cleanShopUrl}/webapi/rest/oauth/token`,
-        { grant_type: "authorization_code", code: authCode },
         {
-          auth: { username: clientId, password: clientSecret },
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          grant_type: "authorization_code",
+          code: authCode,
+        },
+        {
+          auth: {
+            username: clientId,
+            password: clientSecret,
+          },
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
         }
       );
 
@@ -139,7 +149,9 @@ settingsRouter.get("/", async (req: Request, res: Response) => {
       return res.redirect(`/settings?shopId=${shopId}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Install error";
-      console.error("[Settings Install] OAuth exchange failed:", message);
+      const responseData = (error as any)?.response?.data;
+      const responseStatus = (error as any)?.response?.status;
+      console.error(`[Settings Install] OAuth exchange failed (${responseStatus}):`, message, responseData || "");
       // Fall through to serve the page normally
     }
   }
