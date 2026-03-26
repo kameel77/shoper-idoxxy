@@ -1,9 +1,11 @@
 import path from "node:path";
 
+import axios from "axios";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 
 import { resolveShopClient } from "../middleware/resolveShopClient";
+import { env } from "../config/env";
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
 import { ShoperService } from "../services/shoperService";
@@ -74,7 +76,108 @@ const sanitizeConnection = (connection: any) => {
   return rest;
 };
 
-settingsRouter.get("/", (_req: Request, res: Response) => {
+settingsRouter.get("/", async (req: Request, res: Response) => {
+  const action = req.query.action as string | undefined;
+  const shopUrlParam = req.query.shop_url as string | undefined;
+  const authCode = req.query.auth_code as string | undefined;
+  const shopLicense = req.query.shop as string | undefined;
+
+  // Handle Shoper App Store install action
+  if (action === "install" && authCode && shopUrlParam) {
+    try {
+      const cleanShopUrl = shopUrlParam.replace(/^https?:\/\//, "");
+      const clientId = env.SHOPER_APP_STORE_CLIENT_ID || env.SHOPER_CLIENT_ID;
+      const clientSecret = env.SHOPER_CLIENT_SECRET;
+
+      if (!clientId || !clientSecret) {
+        console.error("[Settings Install] Missing Shoper credentials");
+        return res.sendFile(path.join(process.cwd(), "public/settings.html"));
+      }
+
+      // Exchange auth_code for OAuth tokens
+      const tokenResponse = await axios.post(
+        `https://${cleanShopUrl}/webapi/rest/oauth/token`,
+        { grant_type: "authorization_code", code: authCode },
+        {
+          auth: { username: clientId, password: clientSecret },
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      );
+
+      const { access_token, refresh_token } = tokenResponse.data;
+      if (!access_token) {
+        throw new Error("Shoper API did not return access_token");
+      }
+
+      // Get shop ID from application-info
+      const appInfoRes = await axios.get(`https://${cleanShopUrl}/webapi/rest/application-info`, {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+      const shopId = appInfoRes.data?.shop_id?.toString() || cleanShopUrl;
+
+      // Get canonical shop URL from application-config
+      let resolvedShopUrl = `https://${cleanShopUrl}`;
+      try {
+        const appConfigRes = await axios.get(`https://${cleanShopUrl}/webapi/rest/application-config`, {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        const configShopUrl = appConfigRes.data?.shop_url || appConfigRes.data?.technical_url;
+        if (configShopUrl) {
+          resolvedShopUrl = configShopUrl.startsWith("http") ? configShopUrl : `https://${configShopUrl}`;
+        }
+      } catch {
+        // Fallback to URL from params
+      }
+
+      // Save connection
+      shopConnectionService.registerInstallation(shopId, resolvedShopUrl);
+      shopConnectionService.saveShoperTokens(shopId, access_token, refresh_token || "");
+
+      console.log(`[Settings Install] Shop ${shopId} installed (URL: ${resolvedShopUrl})`);
+
+      // Redirect to clean settings URL with shopId
+      return res.redirect(`/settings?shopId=${shopId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Install error";
+      console.error("[Settings Install] OAuth exchange failed:", message);
+      // Fall through to serve the page normally
+    }
+  }
+
+  // Handle Shoper App Store uninstall action
+  if (action === "uninstall" && shopUrlParam) {
+    const cleanShopUrl = shopUrlParam.replace(/^https?:\/\//, "");
+    const allConns = shopConnectionService.listConnections();
+    const shopToRevoke = allConns.find((c) => {
+      if (!c.shopUrl) return false;
+      const connHost = c.shopUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      return connHost === cleanShopUrl;
+    });
+    if (shopToRevoke) {
+      shopConnectionService.revoke(shopToRevoke.shopId, "shoper-app-store");
+      console.log(`[Settings Uninstall] Revoked shop ${shopToRevoke.shopId}`);
+    }
+    // Fall through to serve settings page
+  }
+
+  // For normal admin views: try to auto-resolve shopId from URL params
+  // Shoper admin passes shop=<license_hash> and sometimes shop_url 
+  if (!req.query.shopId && shopUrlParam) {
+    const cleanShopUrl = shopUrlParam.replace(/^https?:\/\//, "");
+    const allConns = shopConnectionService.listConnections();
+    const matched = allConns.find((c) => {
+      if (!c.shopUrl) return false;
+      const connHost = c.shopUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      return connHost === cleanShopUrl;
+    });
+    if (matched) {
+      // Redirect with shopId for the frontend JS
+      const params = new URLSearchParams(req.query as Record<string, string>);
+      params.set("shopId", matched.shopId);
+      return res.redirect(`/settings?${params.toString()}`);
+    }
+  }
+
   res.sendFile(path.join(process.cwd(), "public/settings.html"));
 });
 
