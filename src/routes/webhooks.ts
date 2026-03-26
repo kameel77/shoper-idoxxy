@@ -116,20 +116,48 @@ const resolveShopId = (req: Request): string | undefined => {
   if (explicit) return explicit;
 
   // 2. Shoper sends x-shop-domain header (e.g. "devshop-144794.shoparena.pl")
-  //    Match it against stored shopUrl in connections
+  //    Match it against stored shopUrl or extract numeric shopId from domain
   const shopDomain = req.header("X-Shop-Domain");
   if (shopDomain) {
     const allConnections = shopConnectionService.listConnections();
-    const matched = allConnections.find((c) => {
+
+    // 2a. Try matching stored shopUrl
+    const matchedByUrl = allConnections.find((c) => {
       if (!c.shopUrl) return false;
       const connHost = c.shopUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
       return connHost === shopDomain;
     });
-    if (matched) {
-      console.log(`[Webhooks] Resolved shopId=${matched.shopId} from x-shop-domain=${shopDomain}`);
-      return matched.shopId;
+    if (matchedByUrl) {
+      console.log(`[Webhooks] Resolved shopId=${matchedByUrl.shopId} from x-shop-domain=${shopDomain} (URL match)`);
+      return matchedByUrl.shopId;
     }
-    // If no match by URL, use the domain itself as shopId
+
+    // 2b. Extract numeric ID from domain (e.g. "devshop-144794.shoparena.pl" → "144794")
+    //     and check if any connection has that shopId
+    const numericIdMatch = shopDomain.match(/(\d+)/);
+    if (numericIdMatch) {
+      const numericId = numericIdMatch[1]!;
+      const matchedById = allConnections.find((c) => c.shopId === numericId);
+      if (matchedById) {
+        // Store the domain as shopUrl for future direct lookups
+        if (!matchedById.shopUrl) {
+          shopConnectionService.saveLink({
+            shopId: matchedById.shopId,
+            shopUrl: `https://${shopDomain}`,
+            token: shopConnectionService.getToken(matchedById.shopId) || "",
+            status: undefined,
+            tokenLastVerifiedAt: undefined,
+            idoxxyWorkspaceId: undefined,
+            idoxxyBaseUrl: undefined,
+          });
+          console.log(`[Webhooks] Updated shopUrl for shopId=${numericId} to https://${shopDomain}`);
+        }
+        console.log(`[Webhooks] Resolved shopId=${numericId} from x-shop-domain=${shopDomain} (numeric ID match)`);
+        return numericId;
+      }
+    }
+
+    // 2c. Fallback: use domain itself as shopId
     console.log(`[Webhooks] Using x-shop-domain as shopId: ${shopDomain}`);
     return shopDomain;
   }
