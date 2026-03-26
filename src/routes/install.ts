@@ -93,8 +93,26 @@ installRouter.get("/oauth/callback", async (req: Request, res: Response) => {
       throw new Error("Unresolvable Shop ID on OAuth");
     }
 
+    // Fetch canonical shop URL from application-config (handles custom domains)
+    let resolvedShopUrl = `https://${cleanShopUrl}`;
+    try {
+      const appConfigRes = await axios.get(`https://${cleanShopUrl}/webapi/rest/application-config`, {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      });
+      // Shoper returns shop_url and technical_url; prefer shop_url (may be custom domain)
+      const configShopUrl = appConfigRes.data?.shop_url || appConfigRes.data?.technical_url;
+      if (configShopUrl) {
+        resolvedShopUrl = configShopUrl.startsWith("http") ? configShopUrl : `https://${configShopUrl}`;
+        console.log(`[OAuth] Resolved shop URL from application-config: ${resolvedShopUrl}`);
+      }
+    } catch (configError) {
+      console.warn(`[OAuth] Could not fetch application-config, using fallback URL: ${resolvedShopUrl}`);
+    }
+
     // Rejestracja w bazie Shop Connections
-    const connection = shopConnectionService.registerInstallation(shopId, `https://${cleanShopUrl}`);
+    const connection = shopConnectionService.registerInstallation(shopId, resolvedShopUrl);
     shopConnectionService.saveShoperTokens(shopId, access_token, refresh_token || "");
 
     // Po pomyślnej autoryzacji przekierowujemy użytkownika z powrotem do naszego UI settingsu
