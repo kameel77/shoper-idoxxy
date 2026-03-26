@@ -207,6 +207,8 @@ webhooksRouter.post(
   "/shoper/customer-created",
   verifyShoperSignature,
   async (req: Request, res: Response) => {
+    console.log("[Webhooks] customer-created HEADERS:", JSON.stringify(req.headers, null, 2));
+    console.log("[Webhooks] customer-created BODY:", JSON.stringify(req.body, null, 2));
     const startTime = Date.now();
     const shopId = resolveShopId(req);
     if (!shopId) {
@@ -393,6 +395,8 @@ webhooksRouter.post(
   "/shoper/order-created",
   verifyShoperSignature,
   async (req: Request, res: Response) => {
+    console.log("[Webhooks] order-created HEADERS:", JSON.stringify(req.headers, null, 2));
+    console.log("[Webhooks] order-created BODY:", JSON.stringify(req.body, null, 2));
     const startTime = Date.now();
     const shopId = resolveShopId(req);
     if (!shopId) {
