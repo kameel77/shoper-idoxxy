@@ -3,6 +3,7 @@ import axios from "axios";
 import { z } from "zod";
 import { env } from "../config/env";
 import { shopConnectionService } from "../services/shopConnectionService";
+import { recentInstallsRepository } from "../repositories/recentInstallsRepository";
 
 export const installRouter = Router();
 
@@ -158,4 +159,24 @@ installRouter.post("/uninstall", async (req: Request, res: Response) => {
 installRouter.post("/billing/subscription", async (req: Request, res: Response) => {
   // Puste logowanie płatności
   res.status(200).send("OK");
+});
+
+// App Store Automatic Messages
+installRouter.post("/billing/automatic-messages", async (req: Request, res: Response) => {
+  try {
+    const { action, shop, shop_url } = req.body;
+    if (action === "install" && shop && shop_url) {
+      recentInstallsRepository.addInstall({
+        shopId: shop.toString(),
+        shopUrl: shop_url.toString(),
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[AppStore] Intercepted install for shop: ${shop} (${shop_url})`);
+    }
+  } catch (err) {
+    console.error(`[AppStore] Error handling automatic message:`, err);
+  }
+  
+  // Shoper wymaga zawsze odpowiedzi HTTP 200
+  return res.status(200).send("OK");
 });

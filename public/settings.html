@@ -311,8 +311,14 @@
           <button class="secondary" id="testButton">Testuj połączenie</button>
           <button class="primary" id="connectButton">Połącz</button>
           <button class="ghost" id="refreshConnections">Odśwież status</button>
+          <button class="secondary" id="fetchRecentInstalls" style="margin-left:auto;">Pobierz najnowsze instalacje</button>
         </div>
         <div id="linkStatus" class="status" style="margin-top:12px;">Brak akcji.</div>
+        <div id="recentInstallsContainer" style="margin-top:16px; display:none;">
+          <h3>Ostatnie instalacje z App Store</h3>
+          <p class="muted">Kliknij na sklep, aby automatycznie uzupełnić formularz u góry.</p>
+          <div id="recentInstallsList" class="grid columns-2"></div>
+        </div>
         <div style="margin-top:16px;">
           <h3>Powiązane sklepy</h3>
           <div id="connectionsList" class="grid columns-2"></div>
@@ -525,6 +531,50 @@
         } catch (_error) {
           setLinkStatus("Błąd pobierania połączeń", "error");
         }
+      };
+
+      const fetchRecentInstallsBtn = document.getElementById("fetchRecentInstalls");
+      const recentInstallsContainer = document.getElementById("recentInstallsContainer");
+      const recentInstallsList = document.getElementById("recentInstallsList");
+
+      if (fetchRecentInstallsBtn) {
+        fetchRecentInstallsBtn.addEventListener("click", async () => {
+          try {
+            const data = await requestJson("/settings/recent-installs");
+            if (data?.ok) {
+              const installs = data.items || [];
+              if (installs.length === 0) {
+                 setLinkStatus("Brak ostatnich instalacji w pamięci", "ok");
+                 recentInstallsContainer.style.display = "none";
+                 return;
+              }
+              recentInstallsContainer.style.display = "block";
+              recentInstallsList.innerHTML = installs.map(i => {
+                const dt = new Date(i.timestamp).toLocaleString("pl-PL");
+                return `
+                  <div class="status" style="border:1px solid #e2e8f0; cursor:pointer;" onclick="fillShopData('${i.shopId}', '${i.shopUrl}')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <strong>ID: ${i.shopId}</strong>
+                      <span class="badge" style="background:#dcfce7;color:#166534">Nowe</span>
+                    </div>
+                    <div class="muted" style="margin-top:6px; word-break: break-all;">URL: ${i.shopUrl}</div>
+                    <div class="muted">Czas: ${dt}</div>
+                  </div>
+                `;
+              }).join("");
+              setLinkStatus(`Znaleziono ${installs.length} najnowszych instalacji`, "ok");
+            }
+          } catch (e) {
+            setLinkStatus("Błąd pobierania ostatnich instalacji", "error");
+          }
+        });
+      }
+
+      window.fillShopData = (shopId, shopUrl) => {
+        if (linkShopId) linkShopId.value = shopId;
+        if (linkShopUrl) linkShopUrl.value = shopUrl;
+        setLinkStatus(`Uzupełniono. Możesz podać Token iDoxxy i Testować / Połączyć.`, "ok");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
       const fillSelectOptions = (select, values, selected = []) => {

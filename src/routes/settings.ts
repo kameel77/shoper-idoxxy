@@ -7,6 +7,7 @@ import { z } from "zod";
 import { resolveShopClient } from "../middleware/resolveShopClient";
 import { env } from "../config/env";
 import { settingsRepository } from "../repositories/settingsRepository";
+import { recentInstallsRepository } from "../repositories/recentInstallsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
 import { ShoperService } from "../services/shoperService";
 import { shopConnectionService } from "../services/shopConnectionService";
@@ -439,4 +440,18 @@ settingsRouter.get("/sync-logs", (_req: Request, res: Response) => {
 settingsRouter.get("/sync-stats", (_req: Request, res: Response) => {
   const stats = settingsRepository.getSyncStats();
   res.json(stats);
+});
+
+settingsRouter.get("/recent-installs", (_req: Request, res: Response) => {
+  const items = recentInstallsRepository.getRecentInstalls();
+  res.json({ ok: true, items });
+});
+
+settingsRouter.delete("/recent-installs/:shopId", (req: Request, res: Response) => {
+  const shopId = firstParam(req.params.shopId);
+  if (!shopId) {
+    return res.status(400).json({ ok: false, error: "Brak identyfikatora sklepu" });
+  }
+  recentInstallsRepository.removeInstall(shopId);
+  res.json({ ok: true });
 });
