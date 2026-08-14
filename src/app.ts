@@ -141,7 +141,8 @@ export const createApp = () => {
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         sameSite: env.NODE_ENV === "production" ? "none" : "lax", // Must be none for 3rd-party cross-origin iframes
-      },
+        partitioned: env.NODE_ENV === "production" ? true : undefined,
+      } as any,
     }),
   );
 

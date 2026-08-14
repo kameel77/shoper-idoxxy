@@ -84,16 +84,25 @@ installRouter.get("/oauth/callback", async (req: Request, res: Response) => {
     // do weryfikacji. Na razie używamy ShopURL albo prosimy merchant-a o potwierdzenie
     
     // Próbujemy wywołać by poznać "shopId" jeśli shoper nam go nie da w callbacku
-    const appInfoRes = await axios.get(`https://${cleanShopUrl}/webapi/rest/application-info`, {
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-      },
-    });
-
-    const shopId = appInfoRes.data?.shop_id?.toString() || cleanShopUrl;
+    let shopId = cleanShopUrl.split(".")[0]?.replace(/^devshop-/, "") || cleanShopUrl;
+    try {
+      const appInfoRes = await axios.get(`https://${cleanShopUrl}/webapi/rest/application-info`, {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      });
+      if (appInfoRes.data?.shop_id) {
+        shopId = appInfoRes.data.shop_id.toString();
+      }
+    } catch (appInfoError) {
+      console.warn(
+        `[OAuth Callback] Could not fetch application-info, using fallback shopId "${shopId}":`,
+        (appInfoError as any)?.response?.data || (appInfoError as any)?.message || appInfoError,
+      );
+    }
 
     // Reject jeśli ID nam nie wyszło
-    if(!shopId) {
+    if (!shopId) {
       throw new Error("Unresolvable Shop ID on OAuth");
     }
 
@@ -132,6 +141,10 @@ installRouter.get("/oauth/callback", async (req: Request, res: Response) => {
     shopConnectionService.saveShoperTokens(shopId, access_token, refresh_token || "");
     if (resolvedTechnicalUrl) {
       shopConnectionService.recordTechnicalUrl(shopId, resolvedTechnicalUrl);
+    }
+    const shopLicense = (req.query.shop as string | undefined) || undefined;
+    if (shopLicense) {
+      shopConnectionService.recordShoperLicense(shopId, shopLicense);
     }
 
     // This IS the trust boundary: shopId only ever lands in the session here,

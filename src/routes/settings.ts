@@ -143,11 +143,21 @@ settingsRouter.get("/", async (req: Request, res: Response) => {
         throw new Error("Shoper API did not return access_token");
       }
 
-      // Get shop ID from application-info
-      const appInfoRes = await axios.get(`https://${cleanShopUrl}/webapi/rest/application-info`, {
-        headers: { Authorization: `Bearer ${access_token}` },
-      });
-      const shopId = appInfoRes.data?.shop_id?.toString() || cleanShopUrl;
+      // Get shop ID from application-info, with fallback to extracted shop ID
+      let shopId = cleanShopUrl.split(".")[0]?.replace(/^devshop-/, "") || cleanShopUrl;
+      try {
+        const appInfoRes = await axios.get(`https://${cleanShopUrl}/webapi/rest/application-info`, {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        if (appInfoRes.data?.shop_id) {
+          shopId = appInfoRes.data.shop_id.toString();
+        }
+      } catch (appInfoError) {
+        console.warn(
+          `[Settings Install] Could not fetch application-info, using fallback shopId "${shopId}":`,
+          (appInfoError as any)?.response?.data || (appInfoError as any)?.message || appInfoError,
+        );
+      }
 
       // Get canonical shop URL from application-config
       let resolvedShopUrl = `https://${cleanShopUrl}`;
