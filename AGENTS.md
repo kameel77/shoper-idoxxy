@@ -161,6 +161,13 @@ Key variables:
 
 ---
 
+## Deployment Workflow
+
+- **Auto-deployment:** Pushing changes to GitHub (`staging` branch) automatically triggers a deployment webhook on Coolify.
+- **Rule:** Do NOT manually trigger deployments via Coolify API/MCP; pushing commits to GitHub is sufficient.
+
+---
+
 ## Code Review Checklist
 
 - [ ] All inputs validated with Zod schemas
@@ -170,3 +177,4 @@ Key variables:
 - [ ] Async operations have proper error boundaries
 - [ ] Webhook signature verification included
 - [ ] Shop context properly resolved from headers/payload
+

@@ -206,6 +206,10 @@ beforeAll(async () => {
           return { data: { content }, status: 200, config: reqConfig, headers: {} };
         }
 
+        if (method === "get" && /^\/groups\/[^/]+$/.test(url)) {
+          return { data: { id: url.split("/")[2], groupName: "Mock Group", customers: [] }, status: 200, config: reqConfig, headers: {} };
+        }
+
         if (method === "put" && /^\/groups\//.test(url)) {
           return { data: { ok: true }, status: 200, config: reqConfig, headers: {} };
         }

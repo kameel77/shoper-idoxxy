@@ -45,7 +45,11 @@ type CustomerGroup = {
 type CustomerWithGroups = {
   id: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
   customerGroups: CustomerGroup[];
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type GroupToList = {
@@ -385,13 +389,18 @@ export class IdoxxyClient {
   }
 
   async addCustomersToGroup(groupId: string, customerIds: string[]) {
-    const response = await this.authorizedRequest<Record<string, unknown>>({
-      method: "put",
-      url: `/groups/${groupId}`,
-      data: { customerIds },
-    });
+    if (customerIds.length === 0) {
+      return { ok: true, skipped: true };
+    }
+    const group = await this.getGroup(groupId);
+    const allCustomerIds = new Set((group.customers || []).map((customer) => customer.id));
+    for (const id of customerIds) {
+      allCustomerIds.add(id);
+    }
 
-    return response.data;
+    return this.updateGroup(groupId, {
+      customerIds: Array.from(allCustomerIds),
+    });
   }
 
   async assignCustomersToGroup(payload: { groupId: string; customerIds: string[] }) {
@@ -399,13 +408,7 @@ export class IdoxxyClient {
   }
 
   async addCustomerToGroup(groupId: string, customerId: string) {
-    const group = await this.getGroup(groupId);
-    const customerIds = new Set(group.customers.map((customer) => customer.id));
-    customerIds.add(customerId);
-
-    return this.updateGroup(groupId, {
-      customerIds: Array.from(customerIds),
-    });
+    return this.addCustomersToGroup(groupId, [customerId]);
   }
 
   async removeCustomerFromGroup(groupId: string, customerId: string) {

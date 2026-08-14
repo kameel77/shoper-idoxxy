@@ -134,6 +134,47 @@ idoxxyAdminRouter.get("/customers", async (req: Request, res: Response) => {
 });
 
 idoxxyAdminRouter.get(
+  "/customers/:id",
+  async (req: Request, res: Response) => {
+    try {
+      const client = resolveShopClient(req);
+      const { id } = req.params as { id: string };
+      const customer = await client.getCustomerGroups(id);
+      if (!customer) {
+        return res
+          .status(404)
+          .json({ ok: false, error: "Nie znaleziono klienta w iDoxxy" });
+      }
+
+      const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || customer.email;
+      const groupIds = (customer.customerGroups || []).map((g) => g.id);
+      const groups = (customer.customerGroups || []).map((g) => g.groupName);
+
+      return res.json({
+        ok: true,
+        customer: {
+          id: customer.id,
+          name,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          email: customer.email,
+          status: "active",
+          createdAt: customer.createdAt,
+          lastActivity: customer.updatedAt || customer.createdAt,
+          groupIds,
+          groups,
+        },
+      });
+    } catch (error) {
+      const statusCode = (error as any)?.statusCode;
+      const message =
+        error instanceof Error ? error.message : "Nieznany błąd integracji";
+      return res.status(statusCode || 500).json({ ok: false, error: message });
+    }
+  },
+);
+
+idoxxyAdminRouter.get(
   "/customers/:id/groups",
   async (req: Request, res: Response) => {
     try {
@@ -169,7 +210,20 @@ idoxxyAdminRouter.put(
     try {
       const client = resolveShopClient(req);
       const { id } = req.params as { id: string };
-      await idoxxyService.assignCustomerToGroups(id, parsed.data.groupIds, client);
+      const currentGroups = (await idoxxyService.getCustomerGroups(id, client)) || [];
+      const currentGroupIds = new Set(currentGroups.map((g: any) => g.id));
+      const targetGroupIds = new Set(parsed.data.groupIds);
+
+      const toAdd = parsed.data.groupIds.filter((groupId) => !currentGroupIds.has(groupId));
+      const toRemove = currentGroups
+        .filter((group: any) => !targetGroupIds.has(group.id))
+        .map((group: any) => group.id);
+
+      await Promise.all([
+        ...toAdd.map((groupId) => client.addCustomerToGroup(groupId, id)),
+        ...toRemove.map((groupId) => client.removeCustomerFromGroup(groupId, id)),
+      ]);
+
       return res.json({ ok: true });
     } catch (error) {
       const statusCode = (error as any)?.statusCode;
@@ -227,13 +281,7 @@ idoxxyAdminRouter.post("/customers/bulk", requireCsrf, async (req: Request, res:
     if (action === "remove-group" && groupId) {
       for (const customerId of ids) {
         try {
-          const customerGroups = await idoxxyService.getCustomerGroups(customerId, client);
-          if (customerGroups) {
-            const updatedGroups = customerGroups
-              .filter((group: any) => group.id !== groupId)
-              .map((group: any) => group.id);
-            await idoxxyService.assignCustomerToGroups(customerId, updatedGroups, client);
-          }
+          await client.removeCustomerFromGroup(groupId, customerId);
         } catch (error) {
           console.error(`Error removing customer ${customerId} from group ${groupId}:`, error);
         }

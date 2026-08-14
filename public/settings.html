@@ -661,6 +661,16 @@
 
           renderMappings(config.mappings || []);
 
+          if (config.shopUrl && linkShopUrl && !linkShopUrl.value) {
+            linkShopUrl.value = config.shopUrl;
+          }
+          if (config.idoxxyWorkspaceId && linkWorkspaceId && !linkWorkspaceId.value) {
+            linkWorkspaceId.value = config.idoxxyWorkspaceId;
+          }
+          if (config.isLinked || config.connectionStatus === "linked") {
+            setLinkStatus("Sklep połączony z iDoxxy", "ok");
+          }
+
           if (config.lastSettingsModifiedAt) {
             lastSync.textContent = `Ostatnia zmiana ustawień: ${new Date(config.lastSettingsModifiedAt).toLocaleString("pl-PL")}`;
           } else if (config.lastSyncedAt) {

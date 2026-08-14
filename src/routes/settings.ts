@@ -379,7 +379,15 @@ settingsRouter.get("/test-shoper", requireApiAuth, async (_req: Request, res: Re
 });
 
 settingsRouter.get("/config", requireShopSession, (req: Request, res: Response) => {
-  res.json(settingsRepository.getSnapshot(req.shopId!));
+  const snapshot = settingsRepository.getSnapshot(req.shopId!);
+  const connection = shopConnectionService.getConnection(req.shopId!);
+  res.json({
+    ...snapshot,
+    shopUrl: connection?.shopUrl || undefined,
+    connectionStatus: connection?.status || undefined,
+    idoxxyWorkspaceId: connection?.idoxxyWorkspaceId || undefined,
+    isLinked: connection?.status === "linked",
+  });
 });
 
 settingsRouter.get("/groups", requireShopSession, async (req: Request, res: Response) => {
