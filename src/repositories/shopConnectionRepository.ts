@@ -11,21 +11,75 @@ const now = () => Date.now();
 const getConnectionStmt = db.prepare("SELECT * FROM shop_connections WHERE shop_id = ?");
 const getAllConnectionsStmt = db.prepare("SELECT * FROM shop_connections ORDER BY created_at DESC");
 const insertConnectionStmt = db.prepare(`
-  INSERT INTO shop_connections 
-  (shop_id, shop_url, idoxxy_base_url, idoxxy_workspace_id, idoxxy_token_encrypted, 
-   shoper_access_token, shoper_refresh_token, status, token_last_verified_at, revoked_at, 
-   revoked_by, last_error, last_sync_at, last_sync_status, audit_metadata, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO shop_connections
+  (shop_id, shop_url, idoxxy_base_url, idoxxy_workspace_id, idoxxy_token_encrypted,
+   shoper_access_token, shoper_refresh_token, status, token_last_verified_at, revoked_at,
+   revoked_by, last_error, last_sync_at, last_sync_status, audit_metadata, shoper_license, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const updateConnectionStmt = db.prepare(`
   UPDATE shop_connections SET
     shop_url = ?, idoxxy_base_url = ?, idoxxy_workspace_id = ?, idoxxy_token_encrypted = ?,
     shoper_access_token = ?, shoper_refresh_token = ?, status = ?, token_last_verified_at = ?,
     revoked_at = ?, revoked_by = ?, last_error = ?, last_sync_at = ?, last_sync_status = ?,
-    audit_metadata = ?, updated_at = ?
+    audit_metadata = ?, shoper_license = ?, updated_at = ?
   WHERE shop_id = ?
 `);
 const deleteConnectionStmt = db.prepare("DELETE FROM shop_connections WHERE shop_id = ?");
+// GDPR (Defect B, stage 1): on a verified uninstall the stored tokens are
+// useless immediately (iDoxxy workspace token and Shoper OAuth access/refresh
+// tokens all stop working once the app is uninstalled), so they are wiped
+// right away rather than waiting for the grace-period purge in
+// src/services/dataRetentionService.ts. Deliberately a single narrow UPDATE
+// (same rationale as updateTokenColumn below) rather than routed through
+// revoke() + upsert()'s general merge: everything except status/revoked_at/
+// revoked_by/the three token columns must survive untouched (shop_url,
+// mappings elsewhere, settings elsewhere, shoper_license, ...) so a reinstall
+// inside the grace period has something to revive.
+const revokeAndWipeTokensStmt = db.prepare(`
+  UPDATE shop_connections SET
+    status = 'revoked',
+    revoked_at = ?,
+    revoked_by = ?,
+    idoxxy_token_encrypted = NULL,
+    shoper_access_token = NULL,
+    shoper_refresh_token = NULL,
+    updated_at = ?
+  WHERE shop_id = ?
+`);
+const getConnectionByLicenseStmt = db.prepare(
+  "SELECT * FROM shop_connections WHERE shoper_license = ?",
+);
+// Narrow single-column update - same rationale as updateTokenColumn below:
+// don't route an opportunistic license backfill through the general upsert()
+// merge, which re-derives every column from an existing/payload merge.
+const updateShoperLicenseColumnStmt = db.prepare(
+  "UPDATE shop_connections SET shoper_license = ?, updated_at = ? WHERE shop_id = ?",
+);
+
+// Narrow single-column update - same rationale as updateShoperLicenseColumnStmt
+// above. See src/types/shopConnection.ts's technicalUrl doc comment for why
+// this deliberately never goes through upsert()'s general merge.
+const updateTechnicalUrlColumnStmt = db.prepare(
+  "UPDATE shop_connections SET technical_url = ?, updated_at = ? WHERE shop_id = ?",
+);
+
+// Narrow single-column updates used for lazy legacy-token re-encryption (see
+// shopConnectionService.ts). Deliberately NOT routed through upsert(), which
+// re-derives every column from an `existing ?? payload` merge - a dedicated
+// UPDATE of exactly one column plus updated_at makes "cannot clobber other
+// columns" a property of the SQL itself rather than of merge logic.
+const updateIdoxxyTokenColumnStmt = db.prepare(
+  "UPDATE shop_connections SET idoxxy_token_encrypted = ?, updated_at = ? WHERE shop_id = ?",
+);
+const updateShoperAccessTokenColumnStmt = db.prepare(
+  "UPDATE shop_connections SET shoper_access_token = ?, updated_at = ? WHERE shop_id = ?",
+);
+const updateShoperRefreshTokenColumnStmt = db.prepare(
+  "UPDATE shop_connections SET shoper_refresh_token = ?, updated_at = ? WHERE shop_id = ?",
+);
+
+export type TokenColumn = "idoxxyTokenEncrypted" | "shoperAccessToken" | "shoperRefreshToken";
 
 export class ShopConnectionRepository {
   private rowToConnection(row: any): ShopConnection {
@@ -38,6 +92,8 @@ export class ShopConnectionRepository {
       idoxxyTokenEncrypted: row.idoxxy_token_encrypted || undefined,
       shoperAccessToken: row.shoper_access_token || undefined,
       shoperRefreshToken: row.shoper_refresh_token || undefined,
+      shoperLicense: row.shoper_license || undefined,
+      technicalUrl: row.technical_url || undefined,
       tokenLastVerifiedAt: row.token_last_verified_at || undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -72,6 +128,7 @@ export class ShopConnectionRepository {
         payload.lastSyncAt ?? existing.lastSyncAt ?? null,
         payload.lastSyncStatus ?? existing.lastSyncStatus ?? null,
         payload.auditMetadata ? JSON.stringify(payload.auditMetadata) : existing.auditMetadata ? JSON.stringify(existing.auditMetadata) : null,
+        payload.shoperLicense ?? existing.shoperLicense ?? null,
         timestamp,
         payload.shopId
       );
@@ -94,6 +151,7 @@ export class ShopConnectionRepository {
         payload.lastSyncAt ?? null,
         payload.lastSyncStatus ?? null,
         payload.auditMetadata ? JSON.stringify(payload.auditMetadata) : null,
+        payload.shoperLicense ?? null,
         timestamp,
         timestamp
       );
@@ -127,6 +185,7 @@ export class ShopConnectionRepository {
       idoxxyTokenEncrypted: tokenEncrypted,
       shoperAccessToken: current.shoperAccessToken,
       shoperRefreshToken: current.shoperRefreshToken,
+      shoperLicense: current.shoperLicense,
       tokenLastVerifiedAt: verifiedAt ?? now(),
       status: "linked",
       auditMetadata: current.auditMetadata,
@@ -150,6 +209,7 @@ export class ShopConnectionRepository {
       idoxxyTokenEncrypted: current.idoxxyTokenEncrypted,
       shoperAccessToken: current.shoperAccessToken,
       shoperRefreshToken: current.shoperRefreshToken,
+      shoperLicense: current.shoperLicense,
       tokenLastVerifiedAt: current.tokenLastVerifiedAt,
       auditMetadata: current.auditMetadata,
       revokedAt: undefined,
@@ -173,6 +233,7 @@ export class ShopConnectionRepository {
       idoxxyTokenEncrypted: current.idoxxyTokenEncrypted,
       shoperAccessToken: current.shoperAccessToken,
       shoperRefreshToken: current.shoperRefreshToken,
+      shoperLicense: current.shoperLicense,
       tokenLastVerifiedAt: current.tokenLastVerifiedAt,
       status: "revoked",
       auditMetadata: current.auditMetadata,
@@ -197,6 +258,7 @@ export class ShopConnectionRepository {
       idoxxyTokenEncrypted: current.idoxxyTokenEncrypted,
       shoperAccessToken: current.shoperAccessToken,
       shoperRefreshToken: current.shoperRefreshToken,
+      shoperLicense: current.shoperLicense,
       tokenLastVerifiedAt: verifiedAt ?? now(),
       status: current.status === "token_invalid" ? "linked" : current.status,
       auditMetadata: current.auditMetadata,
@@ -209,9 +271,69 @@ export class ShopConnectionRepository {
     return updated;
   }
 
+  /**
+   * GDPR (Defect B, stage 1): revoke shopId and immediately wipe its
+   * idoxxy_token_encrypted/shoper_access_token/shoper_refresh_token columns,
+   * leaving every other column (shop_url, idoxxy_workspace_id,
+   * shoper_license, audit_metadata, ...) untouched. See
+   * revokeAndWipeTokensStmt above for why this bypasses upsert().
+   */
+  revokeAndWipeTokens(shopId: string, revokedBy?: string): ShopConnection {
+    const timestamp = now();
+    revokeAndWipeTokensStmt.run(timestamp, revokedBy || null, timestamp, shopId);
+    return this.getOrThrow(shopId);
+  }
+
   delete(shopId: string): boolean {
     const result = deleteConnectionStmt.run(shopId);
     return result.changes > 0;
+  }
+
+  /** Resolve a connection by Shoper's App Store "shop" (license) identifier. */
+  getByLicense(license: string): ShopConnection | undefined {
+    const row = getConnectionByLicenseStmt.get(license);
+    if (!row) return undefined;
+    return this.rowToConnection(row);
+  }
+
+  /**
+   * Overwrite exactly the shoper_license column (plus updated_at), touching
+   * nothing else on the row. Mirrors updateTokenColumn below - used to
+   * opportunistically backfill the license mapping without routing through
+   * the general upsert() merge.
+   */
+  updateShoperLicense(shopId: string, license: string): void {
+    updateShoperLicenseColumnStmt.run(license, now(), shopId);
+  }
+
+  /**
+   * Overwrite exactly the technical_url column (plus updated_at), touching
+   * nothing else on the row. See src/types/shopConnection.ts's technicalUrl
+   * doc comment for what this is and why it's a narrow update.
+   */
+  updateTechnicalUrl(shopId: string, technicalUrl: string): void {
+    updateTechnicalUrlColumnStmt.run(technicalUrl, now(), shopId);
+  }
+
+  /**
+   * Overwrite exactly one token column (plus updated_at) for shopId, touching
+   * nothing else on the row. Used to lazily re-encrypt a legacy base64 token
+   * value the moment it is read (see shopConnectionService.ts) without
+   * risking any interaction with concurrent writes to other columns.
+   */
+  updateTokenColumn(shopId: string, column: TokenColumn, encryptedValue: string): void {
+    const timestamp = now();
+    switch (column) {
+      case "idoxxyTokenEncrypted":
+        updateIdoxxyTokenColumnStmt.run(encryptedValue, timestamp, shopId);
+        return;
+      case "shoperAccessToken":
+        updateShoperAccessTokenColumnStmt.run(encryptedValue, timestamp, shopId);
+        return;
+      case "shoperRefreshToken":
+        updateShoperRefreshTokenColumnStmt.run(encryptedValue, timestamp, shopId);
+        return;
+    }
   }
 
   private getOrThrow(shopId: string) {

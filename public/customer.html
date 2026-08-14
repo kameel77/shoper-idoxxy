@@ -133,6 +133,7 @@
         <li><a href="/settings">Panel ustawień</a></li>
         <li><a href="/customers.html" class="active">Klienci</a></li>
         <li><a href="/settings/test-connection" target="_blank">Test API</a></li>
+        <li><a href="/pomoc.html">Pomoc</a></li>
         <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
       </ul>
     </nav>
@@ -166,15 +167,20 @@
       const customerId = params.get("id");
       let loadedGroups = [];
       let currentCustomer = null;
+      // Shop identity comes from the server-side session. Mutating requests
+      // additionally require the double-submit CSRF token from /settings/csrf.
+      let csrfToken = null;
 
       const requestJson = async (path, options = {}) => {
-        const response = await fetch(`${apiBase}${path}`, {
-          headers: {
-            "Content-Type": "application/json",
-            ...(options.headers || {}),
-          },
-          ...options,
-        });
+        const method = (options.method || "GET").toUpperCase();
+        const headers = {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        };
+        if (csrfToken && method !== "GET") {
+          headers["X-CSRF-Token"] = csrfToken;
+        }
+        const response = await fetch(`${apiBase}${path}`, { ...options, headers });
         if (!response.ok) {
           const message = await response.text();
           throw new Error(message || `Błąd ${response.status}`);
@@ -183,6 +189,18 @@
           return null;
         }
         return response.json();
+      };
+
+      const fetchCsrfToken = async () => {
+        try {
+          const resp = await fetch("/settings/csrf");
+          if (resp.ok) {
+            const data = await resp.json();
+            csrfToken = data && data.csrfToken;
+          }
+        } catch (e) {
+          console.warn("[customer] Could not fetch CSRF token", e);
+        }
       };
 
       const renderSummary = (customer) => {
@@ -255,7 +273,7 @@
         }
       });
 
-      loadCustomer();
+      fetchCsrfToken().then(() => loadCustomer());
     </script>
   </body>
 </html>

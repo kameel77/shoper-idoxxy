@@ -275,11 +275,20 @@
         <li><a href="/">Start</a></li>
         <li><a href="/settings" class="active">Panel ustawień</a></li>
         <li><a href="/customers.html">Klienci</a></li>
+        <li><a href="/pomoc.html">Pomoc</a></li>
         <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
 
       </ul>
     </nav>
-    <main>
+    <div id="sessionExpiredBanner" class="status error" style="display:none; margin:16px;">
+      <p id="sessionExpiredMessage">
+        Sesja sklepu wygasła lub nie istnieje. Otwórz aplikację ponownie z poziomu panelu Shoper, aby się zalogować.
+      </p>
+      <div class="actions">
+        <button class="primary" id="reauthorizeButton" type="button">Autoryzuj ponownie</button>
+      </div>
+    </div>
+    <main id="mainContent">
       <section id="linking">
         <h2>Połącz sklep z iDoxxy (token-first)</h2>
         <p class="muted">
@@ -288,13 +297,12 @@
         </p>
         <div class="grid columns-2">
           <div>
-            <label for="linkShopId">Shop ID</label>
-            <input id="linkShopId" placeholder="np. 12345" />
-            <p class="help">Identyfikator sklepu z Shoper (nagłówki webhooków).</p>
-          </div>
-          <div>
-            <label for="linkShopUrl">Shop URL (opcjonalnie)</label>
+            <label for="linkShopUrl">Adres sklepu (opcjonalnie)</label>
             <input id="linkShopUrl" placeholder="https://twoj-sklep.shoper.pl" />
+            <p class="help">
+              Wyświetlany przy połączeniu, nie identyfikuje sklepu - sklep jest już
+              rozpoznany po zalogowanej sesji.
+            </p>
           </div>
           <div>
             <label for="linkToken">Token iDoxxy</label>
@@ -310,19 +318,13 @@
         <div class="actions">
           <button class="secondary" id="testButton">Testuj połączenie</button>
           <button class="primary" id="connectButton">Połącz</button>
-          <button class="ghost" id="refreshConnections">Odśwież status</button>
-          <button class="secondary" id="fetchRecentInstalls" style="margin-left:auto;">Pobierz najnowsze instalacje</button>
         </div>
         <div id="linkStatus" class="status" style="margin-top:12px;">Brak akcji.</div>
-        <div id="recentInstallsContainer" style="margin-top:16px; display:none;">
-          <h3>Ostatnie instalacje z App Store</h3>
-          <p class="muted">Kliknij na sklep, aby automatycznie uzupełnić formularz u góry.</p>
-          <div id="recentInstallsList" class="grid columns-2"></div>
-        </div>
-        <div style="margin-top:16px;">
-          <h3>Powiązane sklepy</h3>
-          <div id="connectionsList" class="grid columns-2"></div>
-        </div>
+        <!-- "Odśwież status" / "Pobierz najnowsze instalacje" / "Powiązane sklepy"
+             used to list every shop's connection and let anyone delete any
+             shop's link - that was the vulnerability this app closes. Those
+             actions are now operator-only (see public/admin/dashboard.html)
+             and are intentionally not exposed in the merchant-facing panel. -->
       </section>
 
       <section>
@@ -393,57 +395,112 @@
       const mappingsBody = document.getElementById("mappingsBody");
       const mappingStats = document.getElementById("mappingStats");
       const lastSync = document.getElementById("lastSync");
-      const linkShopId = document.getElementById("linkShopId");
       const linkShopUrl = document.getElementById("linkShopUrl");
       const linkToken = document.getElementById("linkToken");
       const linkWorkspaceId = document.getElementById("linkWorkspaceId");
       const linkStatus = document.getElementById("linkStatus");
-      const connectionsList = document.getElementById("connectionsList");
-
-      // Auto-fill from URL params (set by server-side install handler)
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlShopId = urlParams.get("shopId");
-      const urlShopUrl = urlParams.get("shop_url");
-      if (urlShopId && linkShopId) {
-        linkShopId.value = urlShopId;
-      }
-      if (urlShopUrl && linkShopUrl) {
-        linkShopUrl.value = decodeURIComponent(urlShopUrl);
-      }
-
+      const mainContent = document.getElementById("mainContent");
+      const sessionExpiredBanner = document.getElementById("sessionExpiredBanner");
+      const sessionExpiredMessage = document.getElementById("sessionExpiredMessage");
+      const reauthorizeButton = document.getElementById("reauthorizeButton");
 
       let cachedGroups = [];
       let cachedDocuments = [];
-      let activeShopId = urlShopId || null;
+      // The server knows which shop this session belongs to (it was set once,
+      // server-side, during the Shoper OAuth exchange). The frontend never
+      // sends a shopId - that used to be a caller-supplied value trusted for
+      // authorization, which is exactly the hole this panel now closes.
+      let csrfToken = null;
+
+      // Shoper opens this page as /settings?shop=...&shop_url=..., so the
+      // shop's host is available in the URL even though the session cookie
+      // (and therefore the shop id) may have expired. This is only ever used
+      // to build a client-side "reauthorize" link - it grants no authority
+      // and every request the server actually acts on still resolves shop
+      // identity solely from the session (or the server's own 401 payload).
+      const knownShopHost = (() => {
+        const params = new URLSearchParams(window.location.search);
+        const raw = params.get("shop_url") || params.get("shopUrl");
+        if (!raw) return null;
+        let decoded = raw;
+        try {
+          decoded = decodeURIComponent(raw);
+        } catch (_error) {
+          // raw wasn't URI-encoded; use it as-is
+        }
+        const withoutScheme = decoded.replace(/^https?:\/\//, "");
+        const host = withoutScheme.split("/")[0]?.trim();
+        return host || null;
+      })();
+
+      // Hides the configuration UI and shows a reauthorization prompt. Used
+      // whenever the server reports the shop session is missing/expired.
+      // Prefers the server-supplied reauthorizeUrl (present when the failed
+      // request itself carried shop_url); falls back to a URL built from the
+      // host captured from this page's own URL on load; if neither is known,
+      // hides the button entirely rather than pointing it at /install with no
+      // shop_url (which just 400s) - the banner message alone still tells the
+      // merchant to reopen the app from the Shoper panel.
+      const showSessionExpired = (message, reauthorizeUrl) => {
+        if (sessionExpiredMessage && message) {
+          sessionExpiredMessage.textContent = message;
+        }
+        const target =
+          reauthorizeUrl || (knownShopHost ? `/install?shop_url=${encodeURIComponent(knownShopHost)}` : null);
+        if (reauthorizeButton) {
+          if (target) {
+            reauthorizeButton.style.display = "";
+            reauthorizeButton.onclick = () => {
+              window.location.href = target;
+            };
+          } else {
+            reauthorizeButton.style.display = "none";
+            reauthorizeButton.onclick = null;
+          }
+        }
+        if (mainContent) mainContent.style.display = "none";
+        if (sessionExpiredBanner) sessionExpiredBanner.style.display = "block";
+      };
+
+      const parseBody = async (response) => {
+        const text = await response.text();
+        if (!text) return null;
+        try {
+          return JSON.parse(text);
+        } catch (_error) {
+          return { error: text };
+        }
+      };
 
       const requestJson = async (path, options = {}) => {
-        let url = `${apiBase}${path}`;
-        // Inject shopId as query param for per-shop context
-        if (activeShopId) {
-          const sep = url.includes("?") ? "&" : "?";
-          url += `${sep}shopId=${encodeURIComponent(activeShopId)}`;
+        const method = (options.method || "GET").toUpperCase();
+        const headers = {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        };
+        // Double-submit CSRF: attach the token fetched from /settings/csrf on
+        // every mutating request. GETs don't need it.
+        if (csrfToken && method !== "GET") {
+          headers["X-CSRF-Token"] = csrfToken;
         }
-        try {
-          console.info("[settings] fetch", { url, options });
-          const response = await fetch(url, {
-            headers: {
-              "Content-Type": "application/json",
-              ...(options.headers || {}),
-            },
-            ...options,
-          });
-          if (!response.ok) {
-            const message = await response.text();
-            throw new Error(message || `Błąd ${response.status}`);
-          }
-          if (response.status === 204) {
-            return null;
-          }
-          return response.json();
-        } catch (error) {
-          console.error("[settings] fetch error", error);
-          throw error;
+
+        const response = await fetch(`${apiBase}${path}`, { ...options, headers });
+        const data = await parseBody(response);
+
+        if (response.status === 401) {
+          showSessionExpired(
+            (data && data.error) ||
+              "Sesja sklepu wygasła lub nie istnieje. Zaloguj się ponownie z poziomu panelu Shoper.",
+            data && data.reauthorizeUrl,
+          );
+          throw new Error((data && data.error) || "Sesja sklepu wygasła.");
         }
+
+        if (!response.ok) {
+          throw new Error((data && data.error) || `Błąd ${response.status}`);
+        }
+
+        return data;
       };
 
       const setLinkStatus = (message, type = "") => {
@@ -458,123 +515,13 @@
         }
       };
 
-      const renderConnections = (items) => {
-        if (!items || items.length === 0) {
-          connectionsList.innerHTML = '<p class="muted">Brak zapisanych połączeń.</p>';
-          return;
-        }
-
-        // Fill initial values in the form from the most recently verified connection
-        const sortedItems = [...items]
-          .sort((a, b) => (b.tokenLastVerifiedAt || 0) - (a.tokenLastVerifiedAt || 0));
-        const activeLinked = sortedItems.find((c) => c.status === "linked") || sortedItems[0];
-
-        // Set active shop context for API calls
-        if (activeLinked) {
-          activeShopId = activeLinked.shopId;
-        }
-        
-        if (activeLinked && !linkShopId.value) {
-          linkShopId.value = activeLinked.shopId || "";
-          linkShopUrl.value = activeLinked.shopUrl || "";
-          linkWorkspaceId.value = activeLinked.idoxxyWorkspaceId || "";
-          if (activeLinked.status === "linked") {
-            linkToken.placeholder = "Nadpisz nowym lub zostaw aby zachować obecny";
-            linkToken.value = "***********";
-          }
-        }
-
-        connectionsList.innerHTML = items
-          .map((c) => {
-            const verified = c.tokenLastVerifiedAt
-              ? new Date(c.tokenLastVerifiedAt).toLocaleString()
-              : "–";
-            return `
-              <div class="status" style="border:1px solid #e2e8f0;">
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                  <strong>${c.shopId}</strong>
-                  <span class="badge">${c.status}</span>
-                  <button class="danger" style="margin-left:auto;padding:4px 10px;font-size:12px;" data-delete-shop="${c.shopId}">Usuń</button>
-                </div>
-                <div class="muted" style="margin-top:6px;">Workspace: ${c.idoxxyWorkspaceId ?? "–"}</div>
-                <div class="muted">Base URL: ${c.idoxxyBaseUrl ?? "default"}</div>
-                <div class="muted">Last verified: ${verified}</div>
-              </div>
-            `;
-          })
-          .join("");
-
-        // Attach delete handlers
-        connectionsList.querySelectorAll("[data-delete-shop]").forEach((btn) => {
-          btn.addEventListener("click", async () => {
-            const shopId = btn.dataset.deleteShop;
-            if (!confirm(`Czy na pewno chcesz usunąć powiązanie sklepu ${shopId}?`)) return;
-            try {
-              await requestJson(`/settings/link/${shopId}`, { method: "DELETE" });
-              setLinkStatus(`Usunięto powiązanie sklepu ${shopId}`, "ok");
-              await loadConnections();
-            } catch (error) {
-              setLinkStatus(error.message || "Nie udało się usunąć powiązania", "error");
-            }
-          });
-        });
-      };
-
-      const loadConnections = async () => {
-        try {
-          const data = await requestJson("/settings/link/connections");
-          if (data?.ok) {
-            renderConnections(data.items || []);
-          } else {
-            setLinkStatus("Nie udało się pobrać połączeń", "error");
-          }
-        } catch (_error) {
-          setLinkStatus("Błąd pobierania połączeń", "error");
-        }
-      };
-
-      const fetchRecentInstallsBtn = document.getElementById("fetchRecentInstalls");
-      const recentInstallsContainer = document.getElementById("recentInstallsContainer");
-      const recentInstallsList = document.getElementById("recentInstallsList");
-
-      if (fetchRecentInstallsBtn) {
-        fetchRecentInstallsBtn.addEventListener("click", async () => {
-          try {
-            const data = await requestJson("/settings/recent-installs");
-            if (data?.ok) {
-              const installs = data.items || [];
-              if (installs.length === 0) {
-                 setLinkStatus("Brak ostatnich instalacji w pamięci", "ok");
-                 recentInstallsContainer.style.display = "none";
-                 return;
-              }
-              recentInstallsContainer.style.display = "block";
-              recentInstallsList.innerHTML = installs.map(i => {
-                const dt = new Date(i.timestamp).toLocaleString("pl-PL");
-                return `
-                  <div class="status" style="border:1px solid #e2e8f0; cursor:pointer;" onclick="fillShopData('${i.shopId}', '${i.shopUrl}')">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                      <strong>ID: ${i.shopId}</strong>
-                      <span class="badge" style="background:#dcfce7;color:#166534">Nowe</span>
-                    </div>
-                    <div class="muted" style="margin-top:6px; word-break: break-all;">URL: ${i.shopUrl}</div>
-                    <div class="muted">Czas: ${dt}</div>
-                  </div>
-                `;
-              }).join("");
-              setLinkStatus(`Znaleziono ${installs.length} najnowszych instalacji`, "ok");
-            }
-          } catch (e) {
-            setLinkStatus("Błąd pobierania ostatnich instalacji", "error");
-          }
-        });
-      }
-
-      window.fillShopData = (shopId, shopUrl) => {
-        if (linkShopId) linkShopId.value = shopId;
-        if (linkShopUrl) linkShopUrl.value = shopUrl;
-        setLinkStatus(`Uzupełniono. Możesz podać Token iDoxxy i Testować / Połączyć.`, "ok");
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Fetches (and caches) the double-submit CSRF token for this shop
+      // session. Requires a valid shop session itself, so if the session is
+      // missing/expired this surfaces the reauthorization banner immediately.
+      const ensureCsrfToken = async () => {
+        const data = await requestJson("/settings/csrf");
+        csrfToken = data && data.csrfToken;
+        return csrfToken;
       };
 
       const fillSelectOptions = (select, values, selected = []) => {
@@ -830,19 +777,12 @@
 
       document.getElementById("testButton").addEventListener("click", async () => {
         const rawToken = linkToken.value.trim();
-        const hasExistingToken = rawToken === "***********";
         const payload = {
-          shopId: linkShopId.value.trim(),
           shopUrl: linkShopUrl.value.trim() || undefined,
-          token: (rawToken && !hasExistingToken) ? rawToken : undefined,
+          token: rawToken || undefined,
         };
 
-        if (!payload.shopId) {
-          setLinkStatus("Podaj shopId (wymagane) oraz token i Doxxy", "error");
-          return;
-        }
-
-        if (!payload.token && !hasExistingToken) {
+        if (!payload.token) {
           setLinkStatus("Podaj token iDoxxy (wymagane do testowania połączenia)", "error");
           return;
         }
@@ -854,7 +794,6 @@
             body: JSON.stringify(payload),
           });
           setLinkStatus("Token działa – pobrano /details/me", "ok");
-          await loadConnections();
         } catch (error) {
           setLinkStatus(error.message || "Token nie działa", "error");
         }
@@ -863,14 +802,13 @@
       document.getElementById("connectButton").addEventListener("click", async () => {
         const rawToken = linkToken.value.trim();
         const payload = {
-          shopId: linkShopId.value.trim(),
           shopUrl: linkShopUrl.value.trim() || undefined,
-          token: (rawToken && rawToken !== "***********") ? rawToken : undefined,
+          token: rawToken || undefined,
           workspaceId: linkWorkspaceId.value.trim() || undefined,
         };
 
-        if (!payload.shopId) {
-          setLinkStatus("Podaj shopId (wymagane) oraz opcjonalnie nowy token", "error");
+        if (!payload.token) {
+          setLinkStatus("Podaj token iDoxxy (wymagane), aby połączyć sklep", "error");
           return;
         }
 
@@ -881,21 +819,19 @@
             body: JSON.stringify(payload),
           });
           setLinkStatus("Połączono sklep z iDoxxy", "ok");
-          await loadConnections();
         } catch (error) {
           setLinkStatus(error.message || "Nie udało się połączyć", "error");
         }
       });
 
-      document.getElementById("refreshConnections").addEventListener("click", () => {
-        loadConnections();
-        setLinkStatus("Odświeżono listę połączeń", "");
-      });
-
-      // Load connections first to set activeShopId, then load settings
-      loadConnections().then(() => loadSettings());
-
-
+      // Fetch the CSRF token first (this also validates the shop session and
+      // shows the reauthorization banner if it's missing/expired), then load
+      // the rest of the configuration UI.
+      ensureCsrfToken()
+        .then(() => loadSettings())
+        .catch((error) => {
+          console.error("[settings] session initialization failed", error);
+        });
     </script>
     <script src="https://dcsaascdn.net/js/dc-sdk-1.0.5.min.js"></script>
     <script>

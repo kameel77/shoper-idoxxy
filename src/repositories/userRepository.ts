@@ -1,8 +1,23 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcrypt";
 import { db } from "../config/database";
+import { env, isProduction } from "../config/env";
 
 const SALT_ROUNDS = 10;
+
+/**
+ * Developer-only fallback password for the bootstrapped admin account, used
+ * only when ADMIN_PASSWORD is unset AND NODE_ENV !== "production" (src/config/env.ts
+ * refuses to boot in production without a strong ADMIN_PASSWORD, so this
+ * branch is unreachable there). This is the same historic value the account
+ * used to be hardcoded to - kept for continuity of local dev workflows and,
+ * not incidentally, as the exact value bootstrapAdminAccount() checks
+ * existing production accounts against below (see its doc comment).
+ *
+ * NEVER log this constant or any password derived from it - see
+ * bootstrapAdminAccount()'s warnings, which intentionally omit the value.
+ */
+const DEV_ONLY_DEFAULT_ADMIN_PASSWORD = "admin123";
 
 export type User = {
   id: string;
@@ -110,22 +125,87 @@ class UserRepository {
     return rows.map(row => this.rowToUser(row));
   }
 
-  async createDefaultAdminIfNotExists(): Promise<void> {
-    const existingAdmin = this.getByUsername("admin");
-    if (existingAdmin) {
+  /**
+   * Bootstrap (or validate) the operator/admin account from
+   * ADMIN_USERNAME/ADMIN_PASSWORD (src/config/env.ts). Runs synchronously
+   * (bcrypt's *Sync API, not bcrypt.hash/compare) specifically so a
+   * production-only failure here can throw synchronously out of createApp()
+   * (src/app.ts) and abort startup before app.listen() is ever reached -
+   * the same fail-fast posture as the SESSION_SECRET/SHOPER_WEBHOOK_SECRET/
+   * TOKEN_ENCRYPTION_KEY checks in src/config/env.ts, just one layer later
+   * because this one needs a database read, not just an env var read.
+   *
+   * Ordering, both deliberate:
+   *  1. In production, refuse to start if ANY active admin-role account
+   *     still holds the historic hardcoded default password ("admin123").
+   *     This is independent of ADMIN_USERNAME/ADMIN_PASSWORD and of whether
+   *     this function would create a new account this run - it exists
+   *     specifically to catch a deployment that already has that weak
+   *     account from before this change, which setting ADMIN_PASSWORD alone
+   *     would not fix (this function never overwrites an existing account's
+   *     password - see step 2).
+   *  2. If a user with ADMIN_USERNAME already exists, leave it untouched -
+   *     never silently overwrite an existing admin's password on boot.
+   *     Otherwise create it with ADMIN_PASSWORD (or, outside production
+   *     only, DEV_ONLY_DEFAULT_ADMIN_PASSWORD - env.ts already refuses to
+   *     boot in production without a strong ADMIN_PASSWORD, so the
+   *     production branch never falls through to the dev fallback).
+   *
+   * Never logs a password, hash, or session/token value - see the two
+   * console.log calls this replaced, which used to print the plaintext
+   * default password.
+   */
+  bootstrapAdminAccount(): void {
+    if (isProduction) {
+      const legacyDefaultPasswordStillInUse = this.getAllUsers().some(
+        (user) =>
+          user.role === "admin" &&
+          user.isActive &&
+          bcrypt.compareSync(DEV_ONLY_DEFAULT_ADMIN_PASSWORD, user.passwordHash),
+      );
+      if (legacyDefaultPasswordStillInUse) {
+        throw new Error(
+          "Wykryto aktywne konto administratora nadal używające domyślnego hasła z poprzedniej wersji aplikacji. " +
+            "Ze względów bezpieczeństwa aplikacja NIE uruchomi się w środowisku produkcyjnym, dopóki hasło tego konta " +
+            "nie zostanie zmienione (zaloguj się i użyj POST /auth/change-password, albo zaktualizuj password_hash " +
+            "bezpośrednio w bazie danych) - samo ustawienie ADMIN_PASSWORD tego nie naprawi, ponieważ istniejące " +
+            "konto nigdy nie jest nadpisywane przy starcie.",
+        );
+      }
+    }
+
+    const existingConfiguredAdmin = this.getByUsername(env.ADMIN_USERNAME);
+    if (existingConfiguredAdmin) {
+      // Already bootstrapped in a previous run (or created/renamed by an
+      // operator) - never overwrite its password here.
       return;
     }
 
-    const defaultPassword = "admin123"; // This should be changed on first login
-    await this.createUser({
-      username: "admin",
-      email: "admin@shoper-idoxxy.local",
-      password: defaultPassword,
-      role: "admin",
-    });
+    const usingDevFallbackPassword = !env.ADMIN_PASSWORD;
+    const password = env.ADMIN_PASSWORD ?? DEV_ONLY_DEFAULT_ADMIN_PASSWORD;
+    const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS);
+    const now = Date.now();
 
-    console.log("[UserRepository] Default admin user created (username: admin, password: admin123)");
-    console.log("[UserRepository] IMPORTANT: Please change the default password after first login!");
+    insertUserStmt.run(
+      randomUUID(),
+      env.ADMIN_USERNAME,
+      `${env.ADMIN_USERNAME}@shoper-idoxxy.local`,
+      passwordHash,
+      "admin",
+      1,
+      null,
+      now,
+      now,
+    );
+
+    if (usingDevFallbackPassword) {
+      console.warn(
+        `[UserRepository] Utworzono konto administratora "${env.ADMIN_USERNAME}" z domyślnym hasłem deweloperskim ` +
+          "(nigdy nie logowanym). To dopuszczalne wyłącznie poza produkcją - ustaw ADMIN_PASSWORD przed wdrożeniem produkcyjnym.",
+      );
+    } else {
+      console.log(`[UserRepository] Utworzono konto administratora "${env.ADMIN_USERNAME}" na podstawie ADMIN_USERNAME/ADMIN_PASSWORD.`);
+    }
   }
 }
 

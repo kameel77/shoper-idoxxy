@@ -1,9 +1,12 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import axios from "axios";
 import { z } from "zod";
 import { env } from "../config/env";
 import { shopConnectionService } from "../services/shopConnectionService";
 import { recentInstallsRepository } from "../repositories/recentInstallsRepository";
+import { establishShopSession } from "../middleware/shopSession";
+import { verifyAppStoreCallbackSignature } from "../middleware/shoperSignature";
+import { appStoreCallbackRateLimiter } from "../middleware/rateLimit";
 
 export const installRouter = Router();
 
@@ -96,6 +99,12 @@ installRouter.get("/oauth/callback", async (req: Request, res: Response) => {
 
     // Fetch canonical shop URL from application-config (handles custom domains)
     let resolvedShopUrl = `https://${cleanShopUrl}`;
+    // technical_url used to be discarded once shop_url was chosen below - it
+    // is now also persisted (see shopConnectionService.recordTechnicalUrl, a
+    // few lines down, once the connection row exists), so src/app.ts can
+    // narrow the CSP frame-ancestors directive once both hosts are known for
+    // a shop's session.
+    let resolvedTechnicalUrl: string | undefined;
     try {
       const appConfigRes = await axios.get(`https://${cleanShopUrl}/webapi/rest/application-config`, {
         headers: {
@@ -108,6 +117,12 @@ installRouter.get("/oauth/callback", async (req: Request, res: Response) => {
         resolvedShopUrl = configShopUrl.startsWith("http") ? configShopUrl : `https://${configShopUrl}`;
         console.log(`[OAuth] Resolved shop URL from application-config: ${resolvedShopUrl}`);
       }
+      const configTechnicalUrl = appConfigRes.data?.technical_url;
+      if (configTechnicalUrl) {
+        resolvedTechnicalUrl = configTechnicalUrl.startsWith("http")
+          ? configTechnicalUrl
+          : `https://${configTechnicalUrl}`;
+      }
     } catch (configError) {
       console.warn(`[OAuth] Could not fetch application-config, using fallback URL: ${resolvedShopUrl}`);
     }
@@ -115,9 +130,27 @@ installRouter.get("/oauth/callback", async (req: Request, res: Response) => {
     // Rejestracja w bazie Shop Connections
     const connection = shopConnectionService.registerInstallation(shopId, resolvedShopUrl);
     shopConnectionService.saveShoperTokens(shopId, access_token, refresh_token || "");
+    if (resolvedTechnicalUrl) {
+      shopConnectionService.recordTechnicalUrl(shopId, resolvedTechnicalUrl);
+    }
 
-    // Po pomyślnej autoryzacji przekierowujemy użytkownika z powrotem do naszego UI settingsu
-    return res.redirect(`/settings?shopId=${shopId}`);
+    // This IS the trust boundary: shopId only ever lands in the session here,
+    // in the install branch of src/routes/settings.ts (GET /settings), or -
+    // as a third path - the signature-verified iframe-entry block further
+    // down that same GET /settings handler (which itself only fires once a
+    // shoper_license mapping recorded from one of these two OAuth exchanges
+    // exists). Nothing else may set it. establishShopSession also
+    // regenerates the session id first (session fixation defense) - if that
+    // fails we must not redirect into what looks like an authenticated area,
+    // so let it throw into the outer catch below.
+    await establishShopSession(req, shopId);
+
+    // Po pomyślnej autoryzacji przekierowujemy użytkownika z powrotem do naszego UI settingsu.
+    // The session now carries the shop id, so no need to leak it via the URL.
+    // shop_url is passed on purely so the page can build a working "reauthorize"
+    // link if this session later expires while the merchant is still in the tab.
+    // It carries no authority - requireShopSession never reads it.
+    return res.redirect(`/settings?shop_url=${encodeURIComponent(cleanShopUrl)}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sth went wrong";
     console.error("[OAuth Callback] Error:", message);
@@ -125,9 +158,41 @@ installRouter.get("/oauth/callback", async (req: Request, res: Response) => {
   }
 });
 
+// Verifies the `hash` field Shoper attaches to App Store lifecycle/billing
+// callbacks (see src/middleware/shoperSignature.ts for the confirmed
+// algorithm and its source). Shoper requires HTTP 200 on these endpoints no
+// matter what, so on a missing/invalid signature this middleware itself
+// responds 200 and does NOT call next() - the route handler (and therefore
+// any state change: revoke, recentInstallsRepository.addInstall, ...) never
+// runs. Nothing about the signature or secret is ever logged, only enough
+// context to diagnose (path, shop_url, whether a hash was present at all).
+//
+// When SHOPER_APPSTORE_SECRET is not configured, verification is skipped -
+// this is only reachable outside production (see the fail-fast check in
+// src/config/env.ts) and is already logged loudly once at startup there, not
+// per-request here.
+const verifyAppStoreCallback = (req: Request, res: Response, next: NextFunction) => {
+  if (!env.SHOPER_APPSTORE_SECRET) {
+    return next();
+  }
+
+  const body = req.body as Record<string, unknown> | undefined;
+  if (verifyAppStoreCallbackSignature(body, env.SHOPER_APPSTORE_SECRET)) {
+    return next();
+  }
+
+  console.warn("[AppStore] Rejected callback with missing/invalid signature", {
+    path: req.path,
+    shopUrl: (body?.shop_url ?? req.query?.shop_url)?.toString(),
+    hashPresent: typeof body?.hash === "string" && body.hash.length > 0,
+  });
+
+  return res.status(200).send("OK");
+};
+
 // App Store Odinstalowanie Aplikacji
 // Shoper wymusza obecność /uninstall (metoda POST) by usunąć zasoby
-installRouter.post("/uninstall", async (req: Request, res: Response) => {
+installRouter.post("/uninstall", appStoreCallbackRateLimiter, verifyAppStoreCallback, async (req: Request, res: Response) => {
   try {
     const shopUrl = (req.body?.shop_url || req.query?.shop_url)?.toString();
     const action = req.body?.action;
@@ -135,17 +200,23 @@ installRouter.post("/uninstall", async (req: Request, res: Response) => {
     if (action === "uninstall" || shopUrl) {
       // Find connections by URL
       const allConns = shopConnectionService.listConnections();
-      const shopToRevoke = allConns.find(c => 
-        c.shopUrl === shopUrl || 
-        c.shopUrl === `https://${shopUrl}` || 
+      const shopToRevoke = allConns.find(c =>
+        c.shopUrl === shopUrl ||
+        c.shopUrl === `https://${shopUrl}` ||
         c.shopUrl?.replace(/^https?:\/\//, "") === shopUrl?.replace(/^https?:\/\//, "")
       );
 
       if (shopToRevoke) {
-        shopConnectionService.revoke(shopToRevoke.shopId, "shoper-app-store");
+        // GDPR (Defect B, stage 1): this callback is signature-verified by
+        // verifyAppStoreCallback above, so a shop match here is a genuine
+        // uninstall - wipe tokens immediately, not just flip the status (see
+        // shopConnectionService.revokeAndWipeTokens). Full row deletion of
+        // settings/event_mappings/sync_logs happens later, after the grace
+        // period, via src/services/dataRetentionService.ts.
+        shopConnectionService.revokeAndWipeTokens(shopToRevoke.shopId, "shoper-app-store");
       }
     }
-    
+
     // Shoper requires 200 OK regardless of whether we matched or not
     return res.status(200).send("OK");
   } catch (error) {
@@ -156,13 +227,13 @@ installRouter.post("/uninstall", async (req: Request, res: Response) => {
 });
 
 // App Store Billing Webhook
-installRouter.post("/billing/subscription", async (req: Request, res: Response) => {
+installRouter.post("/billing/subscription", appStoreCallbackRateLimiter, verifyAppStoreCallback, async (req: Request, res: Response) => {
   // Puste logowanie płatności
   res.status(200).send("OK");
 });
 
 // App Store Automatic Messages
-installRouter.post("/billing/automatic-messages", async (req: Request, res: Response) => {
+installRouter.post("/billing/automatic-messages", appStoreCallbackRateLimiter, verifyAppStoreCallback, async (req: Request, res: Response) => {
   try {
     const { action, shop, shop_url } = req.body;
     if (action === "install" && shop && shop_url) {
@@ -172,11 +243,31 @@ installRouter.post("/billing/automatic-messages", async (req: Request, res: Resp
         timestamp: new Date().toISOString(),
       });
       console.log(`[AppStore] Intercepted install for shop: ${shop} (${shop_url})`);
+
+      // Best-effort shoper_license backfill: this callback only carries
+      // `shop` (the App Store license, NOT this app's numeric shopId - see
+      // src/middleware/shoperSignature.ts's iframe-entry section) and
+      // `shop_url`, no numeric shop_id. Match an existing connection by
+      // normalized shop_url (same comparison as /uninstall below) and record
+      // the license against it if found; otherwise there's nothing to attach
+      // it to yet, and the opportunistic backfill in GET /settings's
+      // iframe-entry block will pick it up once the shop has a session.
+      const shopUrlStr = shop_url.toString();
+      const allConns = shopConnectionService.listConnections();
+      const matchedConnection = allConns.find(
+        (c) =>
+          c.shopUrl === shopUrlStr ||
+          c.shopUrl === `https://${shopUrlStr}` ||
+          c.shopUrl?.replace(/^https?:\/\//, "") === shopUrlStr.replace(/^https?:\/\//, ""),
+      );
+      if (matchedConnection) {
+        shopConnectionService.recordShoperLicense(matchedConnection.shopId, shop.toString());
+      }
     }
   } catch (err) {
     console.error(`[AppStore] Error handling automatic message:`, err);
   }
-  
+
   // Shoper wymaga zawsze odpowiedzi HTTP 200
   return res.status(200).send("OK");
 });

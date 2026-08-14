@@ -6,9 +6,16 @@ import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
 import { emailService } from "../services/emailService";
 import { shopConnectionService } from "../services/shopConnectionService";
+import { requireShopSession, requireCsrf } from "../middleware/shopSession";
 import type { SettingsSnapshot } from "../types/settings";
 
 export const idoxxyAdminRouter = Router();
+
+// Every route on this router touches per-shop data - require a verified shop
+// session for all of it. req.shopId is populated by requireShopSession from
+// the session (or, for an authenticated operator, from an explicit ?shopId=
+// they supplied).
+idoxxyAdminRouter.use(requireShopSession);
 
 const firstParam = (value: string | string[] | undefined): string | undefined =>
   Array.isArray(value) ? value[0] : value;
@@ -55,11 +62,13 @@ const resendDocumentSchema = z.object({
   recipients: z.array(z.string()).min(1),
 });
 
-idoxxyAdminRouter.get("/settings", (_req: Request, res: Response) => {
-  res.json(settingsRepository.getSnapshot());
+idoxxyAdminRouter.get("/settings", (req: Request, res: Response) => {
+  res.json(settingsRepository.getSnapshot(req.shopId!));
 });
 
-idoxxyAdminRouter.put("/settings", (req: Request, res: Response) => {
+idoxxyAdminRouter.put("/settings", requireCsrf, (req: Request, res: Response) => {
+  const shopId = req.shopId!;
+
   const parsed = settingsSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -82,7 +91,7 @@ idoxxyAdminRouter.put("/settings", (req: Request, res: Response) => {
     lastSettingsModifiedAt: undefined,
   };
 
-  settingsRepository.updateSettings(payload);
+  settingsRepository.updateSettings(shopId, payload);
   return res.json({ ok: true });
 });
 
@@ -149,6 +158,7 @@ idoxxyAdminRouter.get(
 
 idoxxyAdminRouter.put(
   "/customers/:id/groups",
+  requireCsrf,
   async (req: Request, res: Response) => {
     const parsed = customerGroupsSchema.safeParse(req.body);
 
@@ -172,6 +182,7 @@ idoxxyAdminRouter.put(
 
 idoxxyAdminRouter.post(
   "/customers/bulk-add-group",
+  requireCsrf,
   async (req: Request, res: Response) => {
     const parsed = bulkAddGroupSchema.safeParse(req.body);
 
@@ -196,7 +207,7 @@ idoxxyAdminRouter.post(
   },
 );
 
-idoxxyAdminRouter.post("/customers/bulk", async (req: Request, res: Response) => {
+idoxxyAdminRouter.post("/customers/bulk", requireCsrf, async (req: Request, res: Response) => {
   const parsed = bulkActionSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -345,7 +356,7 @@ idoxxyAdminRouter.get("/debug/documents", async (req: Request, res: Response) =>
   return res.json({ ok: true, results });
 });
 
-idoxxyAdminRouter.post("/documents/:documentId/resend-notification", async (req: Request, res: Response) => {
+idoxxyAdminRouter.post("/documents/:documentId/resend-notification", requireCsrf, async (req: Request, res: Response) => {
   const documentId = firstParam(req.params.documentId);
   
   if (!documentId) {

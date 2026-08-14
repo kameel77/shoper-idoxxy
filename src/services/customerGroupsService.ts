@@ -6,11 +6,21 @@ export type CustomerGroup = {
   groupName: string;
 };
 
+// Constructed per-request from a shop-scoped client (see
+// src/routes/customerGroups.ts, which builds one via resolveShopClient(req)
+// for every request). shopId and client are both required constructor
+// arguments - deliberately no defaults - so it is impossible to construct an
+// instance that talks to iDoxxy through the platform-wide env credentials
+// instead of the calling shop's own token, and impossible to read/invalidate
+// another shop's cache entries by omitting shopId.
 export class CustomerGroupsService {
-  constructor(private readonly client = new IdoxxyClient()) {}
+  constructor(
+    private readonly shopId: string,
+    private readonly client: IdoxxyClient,
+  ) {}
 
   async getCustomerGroups(customerId: string) {
-    const cached = customerGroupsCache.get<CustomerGroup[]>(customerId);
+    const cached = customerGroupsCache.get<CustomerGroup[]>(this.shopId, customerId);
 
     if (cached) {
       return cached;
@@ -19,7 +29,7 @@ export class CustomerGroupsService {
     const customer = await this.client.getCustomerGroups(customerId);
     const groups = customer?.customerGroups ?? [];
 
-    customerGroupsCache.set(customerId, groups);
+    customerGroupsCache.set(this.shopId, customerId, groups);
     return groups;
   }
 
@@ -33,7 +43,7 @@ export class CustomerGroupsService {
       customerIds,
     });
 
-    customerGroupsCache.deleteMany(customerIds);
+    customerGroupsCache.deleteMany(this.shopId, customerIds);
 
     return response;
   }

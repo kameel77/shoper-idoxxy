@@ -6,9 +6,16 @@ import { z } from "zod";
 import { settingsRepository } from "../repositories/settingsRepository";
 import { IdoxxyService } from "../services/idoxxyService";
 import { emailService } from "../services/emailService";
+import { requireShopSession, requireCsrf } from "../middleware/shopSession";
 
 const idoxxyService = new IdoxxyService();
 export const adminIdoxxyRouter = Router();
+
+// Every route on this router touches per-shop (or demo, but still
+// settings-adjacent) data - require a verified shop session for all of it.
+// req.shopId is populated by requireShopSession from the session (or, for an
+// authenticated operator, from an explicit ?shopId= they supplied).
+adminIdoxxyRouter.use(requireShopSession);
 
 const firstParam = (value: string | string[] | undefined): string | undefined =>
   Array.isArray(value) ? value[0] : value;
@@ -107,9 +114,11 @@ const paginate = <T>(items: T[], page = 1, perPage = 8) => {
   };
 };
 
-adminIdoxxyRouter.get("/settings/test-connection", async (_req: Request, res: Response) => {
+adminIdoxxyRouter.get("/settings/test-connection", async (req: Request, res: Response) => {
+  const shopId = req.shopId!;
+
   try {
-    const result = await idoxxyService.healthCheck();
+    const result = await idoxxyService.healthCheck(shopId);
     res.json(result);
   } catch (error) {
     const message =
@@ -118,33 +127,39 @@ adminIdoxxyRouter.get("/settings/test-connection", async (_req: Request, res: Re
   }
 });
 
-adminIdoxxyRouter.get("/settings/config", (_req: Request, res: Response) => {
-  res.json(settingsRepository.getSnapshot());
+adminIdoxxyRouter.get("/settings/config", (req: Request, res: Response) => {
+  res.json(settingsRepository.getSnapshot(req.shopId!));
 });
 
-adminIdoxxyRouter.put("/settings/credentials", (req: Request, res: Response) => {
+adminIdoxxyRouter.put("/settings/credentials", requireCsrf, (req: Request, res: Response) => {
+  const shopId = req.shopId!;
+
   const parsed = credentialsSchema.safeParse(req.body);
 
   if (!parsed.success) {
     return res.status(400).json({ ok: false, errors: parsed.error.issues });
   }
 
-  settingsRepository.saveCredentials(parsed.data);
+  settingsRepository.saveCredentials(shopId, parsed.data);
   return res.json({ ok: true });
 });
 
-adminIdoxxyRouter.put("/settings/default-groups", (req: Request, res: Response) => {
+adminIdoxxyRouter.put("/settings/default-groups", requireCsrf, (req: Request, res: Response) => {
+  const shopId = req.shopId!;
+
   const parsed = defaultGroupsSchema.safeParse(req.body);
 
   if (!parsed.success) {
     return res.status(400).json({ ok: false, errors: parsed.error.issues });
   }
 
-  settingsRepository.updateDefaultGroups(parsed.data);
+  settingsRepository.updateDefaultGroups(shopId, parsed.data);
   return res.json({ ok: true });
 });
 
-adminIdoxxyRouter.post("/settings/mappings", (req: Request, res: Response) => {
+adminIdoxxyRouter.post("/settings/mappings", requireCsrf, (req: Request, res: Response) => {
+  const shopId = req.shopId!;
+
   const parsed = mappingSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -152,22 +167,33 @@ adminIdoxxyRouter.post("/settings/mappings", (req: Request, res: Response) => {
   }
 
   const { id, documentId, ...rest } = parsed.data;
-  const mapping = settingsRepository.upsertMapping({
-    ...rest,
-    id: id || undefined,
-    documentId: documentId || undefined,
-  });
-  return res.json({ ok: true, mapping });
+  try {
+    const mapping = settingsRepository.upsertMapping(shopId, {
+      ...rest,
+      id: id || undefined,
+      documentId: documentId || undefined,
+    });
+    return res.json({ ok: true, mapping });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Nie udało się zapisać mapowania.";
+    return res.status(400).json({ ok: false, error: message });
+  }
 });
 
-adminIdoxxyRouter.delete("/settings/mappings/:id", (req: Request, res: Response) => {
+adminIdoxxyRouter.delete("/settings/mappings/:id", requireCsrf, (req: Request, res: Response) => {
+  const shopId = req.shopId!;
+
   const id = firstParam(req.params.id);
 
   if (!id) {
     return res.status(400).json({ ok: false, error: "Brak identyfikatora mapowania" });
   }
 
-  settingsRepository.removeMapping(id);
+  const removed = settingsRepository.removeMapping(shopId, id);
+  if (!removed) {
+    return res.status(404).json({ ok: false, error: "Nie znaleziono mapowania dla tego sklepu." });
+  }
   return res.json({ ok: true });
 });
 
@@ -225,7 +251,7 @@ adminIdoxxyRouter.get("/customers/:id", (req: Request, res: Response) => {
   });
 });
 
-adminIdoxxyRouter.put("/customers/:id/groups", (req: Request, res: Response) => {
+adminIdoxxyRouter.put("/customers/:id/groups", requireCsrf, (req: Request, res: Response) => {
   const customer = customers.find((entry) => entry.id === req.params.id);
 
   if (!customer) {
@@ -242,7 +268,7 @@ adminIdoxxyRouter.put("/customers/:id/groups", (req: Request, res: Response) => 
   return res.json({ ok: true });
 });
 
-adminIdoxxyRouter.post("/customers/bulk", (req: Request, res: Response) => {
+adminIdoxxyRouter.post("/customers/bulk", requireCsrf, (req: Request, res: Response) => {
   const parsed = bulkActionSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -306,7 +332,7 @@ adminIdoxxyRouter.post("/customers/bulk", (req: Request, res: Response) => {
   return res.json({ ok: true, updated: selectedCustomers.length });
 });
 
-adminIdoxxyRouter.post("/documents/:documentId/resend-notification", (req: Request, res: Response) => {
+adminIdoxxyRouter.post("/documents/:documentId/resend-notification", requireCsrf, (req: Request, res: Response) => {
   const { documentId } = req.params;
 
   if (!documentId) {

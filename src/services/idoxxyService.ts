@@ -16,8 +16,14 @@ type EnsuredCustomer = {
 export class IdoxxyService {
   constructor(private readonly client = new IdoxxyClient()) {}
 
-  private getClient(apiKeyOverride?: string, baseUrlOverride?: string) {
-    const creds = settingsRepository.getIdoxxyCredentials();
+  // shopId is only consulted to look up the shop-scoped legacy `settings` table
+  // credentials (idoxxy_base_url / idoxxy_api_key). When omitted, no such lookup
+  // happens - callers that already know the per-shop token (e.g. getClientForShop)
+  // pass it explicitly via apiKeyOverride/baseUrlOverride instead.
+  private getClient(apiKeyOverride?: string, baseUrlOverride?: string, shopId?: string) {
+    const creds = shopId
+      ? settingsRepository.getIdoxxyCredentials(shopId)
+      : { apiKey: undefined as string | undefined, baseUrl: undefined as string | undefined };
     const config: { baseUrl?: string; apiKey?: string } = {};
     if (baseUrlOverride) {
       config.baseUrl = baseUrlOverride;
@@ -33,25 +39,35 @@ export class IdoxxyService {
     return new IdoxxyClient(undefined, config);
   }
 
+  // Both failure modes below mean the same thing to a caller: this shop has
+  // no usable iDoxxy connection right now. statusCode 428 ("Precondition
+  // Required") lets resolveShopClient()'s callers (settings.ts /groups,
+  // /documents and now customerGroups.ts) surface that as 428 instead of a
+  // misleading 500 - see src/middleware/resolveShopClient.ts's own 428 for
+  // the sibling "no shop session at all" case.
   getClientForShop(shopId: string) {
     const connection = shopConnectionService.getConnection(shopId);
     const token = shopConnectionService.getToken(shopId);
 
     if (!connection || !token) {
-      throw new Error(`Brak powiązanego tokena Idoxxy dla sklepu ${shopId}`);
+      const error = new Error(`Brak powiązanego tokena Idoxxy dla sklepu ${shopId}`);
+      (error as Error & { statusCode?: number }).statusCode = 428;
+      throw error;
     }
 
     if (connection.status !== "linked") {
-      throw new Error(
+      const error = new Error(
         `Połączenie sklepu ${shopId} nie jest aktywne (status=${connection.status})`,
       );
+      (error as Error & { statusCode?: number }).statusCode = 428;
+      throw error;
     }
 
     return this.getClient(token, connection.idoxxyBaseUrl);
   }
 
-  async healthCheck() {
-    const data = await this.getClient().getAccountDetails();
+  async healthCheck(shopId: string) {
+    const data = await this.getClient(undefined, undefined, shopId).getAccountDetails();
     return {
       ok: true,
       payload: data,

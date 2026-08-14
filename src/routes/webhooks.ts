@@ -1,5 +1,3 @@
-import crypto from "node:crypto";
-
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
 
@@ -8,6 +6,7 @@ import { settingsRepository } from "../repositories/settingsRepository";
 import type { EventMapping } from "../types/settings";
 import { IdoxxyService } from "../services/idoxxyService";
 import { shopConnectionService } from "../services/shopConnectionService";
+import { verifyEventWebhookSignature, verifyDocumentedWebhookSignature } from "../middleware/shoperSignature";
 
 type MappingResolution = {
   source: "mapping" | "fallback";
@@ -104,7 +103,9 @@ const mappingMatchesPayload = (mapping: EventMapping, payload: unknown) => {
   });
 };
 
-const resolveShopId = (req: Request): string | undefined => {
+// Exported for direct unit testing (see tests/webhooks.test.ts) - the deleted
+// cross-tenant fallbacks are specifically covered there.
+export const resolveShopId = (req: Request): string | undefined => {
   // 1. Try explicit shop ID headers
   const headerId =
     req.header("X-Shoper-Shop-Id") ||
@@ -139,17 +140,11 @@ const resolveShopId = (req: Request): string | undefined => {
       const numericId = numericIdMatch[1]!;
       const matchedById = allConnections.find((c) => c.shopId === numericId);
       if (matchedById) {
-        // Store the domain as shopUrl for future direct lookups
+        // Store the domain as shopUrl for future direct lookups. Uses the narrow
+        // updateShopUrl() method (not saveLink) so the existing token is never
+        // touched, let alone blanked.
         if (!matchedById.shopUrl) {
-          shopConnectionService.saveLink({
-            shopId: matchedById.shopId,
-            shopUrl: `https://${shopDomain}`,
-            token: shopConnectionService.getToken(matchedById.shopId) || "",
-            status: undefined,
-            tokenLastVerifiedAt: undefined,
-            idoxxyWorkspaceId: undefined,
-            idoxxyBaseUrl: undefined,
-          });
+          shopConnectionService.updateShopUrl(matchedById.shopId, `https://${shopDomain}`);
           console.log(`[Webhooks] Updated shopUrl for shopId=${numericId} to https://${shopDomain}`);
         }
         console.log(`[Webhooks] Resolved shopId=${numericId} from x-shop-domain=${shopDomain} (numeric ID match)`);
@@ -157,9 +152,10 @@ const resolveShopId = (req: Request): string | undefined => {
       }
     }
 
-    // 2c. Fallback: use domain itself as shopId
-    console.log(`[Webhooks] Using x-shop-domain as shopId: ${shopDomain}`);
-    return shopDomain;
+    // No 2c fallback: an unrecognised X-Shop-Domain must NOT be used as the shopId
+    // directly - that would let a spoofed/unknown domain address another tenant's
+    // (or a nonexistent) workspace. Fall through to Origin/Referer matching below
+    // instead of returning early.
   }
 
   // 3. Try to match Origin/Referer to a known shop URL
@@ -175,14 +171,9 @@ const resolveShopId = (req: Request): string | undefined => {
     if (matched) return matched.shopId;
   }
 
-  // 4. Fallback: if only one linked shop exists, use it (single-tenant mode)
-  const allConnections = shopConnectionService.listConnections();
-  const linkedConnections = allConnections.filter((c) => c.status === "linked");
-  if (linkedConnections.length === 1 && linkedConnections[0]) {
-    console.log(`[Webhooks] Auto-resolved shopId=${linkedConnections[0].shopId} (single linked shop)`);
-    return linkedConnections[0].shopId;
-  }
-
+  // No "single linked shop" fallback: guessing the shop when nothing matched
+  // would let one tenant's webhook silently be processed under another tenant's
+  // rules/workspace. Return undefined so the caller answers 400.
   return undefined;
 };
 
@@ -195,11 +186,12 @@ const handleAuthError = (shopId: string, error: unknown) => {
 };
 
 const resolveMappingGroups = (
+  shopId: string,
   eventKey: string,
   payload: unknown,
   fallbackGroupIds: string[],
 ): MappingResolution | null => {
-  const snapshot = settingsRepository.getSnapshot();
+  const snapshot = settingsRepository.getSnapshot(shopId);
   const mappings = snapshot.mappings
     .filter((mapping: EventMapping) => mapping.enabled && mapping.event === eventKey)
     .sort((a: EventMapping, b: EventMapping) => a.priority - b.priority);
@@ -240,15 +232,50 @@ const extractCustomerFromOrder = (payload: z.infer<typeof orderCreatedSchema>): 
   };
 };
 
+// Whether SHOPER_WEBHOOK_SECRET is configured at all is logged loudly once at
+// startup (src/config/env.ts) - never here, so an unconfigured secret doesn't
+// spam the logs on every single unsigned webhook request.
+//
+// Two signature schemes are accepted (see the doc comment in
+// src/middleware/shoperSignature.ts for why): Shoper's documented
+// sha1(webhookId:secret:body) scheme (X-Webhook-Id / X-Webhook-SHA1), and the
+// HMAC-SHA256-over-raw-body scheme this app shipped with (X-Shoper-Webhook-Signature
+// / X-Shoper-Signature). A request is accepted if EITHER validates. Which
+// scheme actually matched is logged once per process (not per request) -
+// that's the diagnostic that tells us, from the owner's dev shop, which one
+// Shoper really sends.
+type WebhookSignatureScheme = "documented-sha1" | "hmac-sha256-fallback";
+const loggedSignatureSchemes = new Set<WebhookSignatureScheme>();
+
+const logSignatureSchemeOnce = (scheme: WebhookSignatureScheme): void => {
+  if (loggedSignatureSchemes.has(scheme)) {
+    return;
+  }
+  loggedSignatureSchemes.add(scheme);
+  // eslint-disable-next-line no-console
+  console.info(`[Webhooks] Signature scheme in use: ${scheme}`);
+};
+
 const verifyShoperSignature = (req: Request, res: Response, next: NextFunction) => {
   if (!env.SHOPER_WEBHOOK_SECRET) {
     return next();
   }
 
-  const signatureHeader =
+  const hmacSignatureHeader =
     req.header("X-Shoper-Webhook-Signature") ?? req.header("X-Shoper-Signature");
+  const webhookId = req.header("X-Webhook-Id");
+  const documentedSignatureHeader = req.header("X-Webhook-SHA1");
 
-  if (!signatureHeader) {
+  // Names only, for diagnosability - never header values (the whole point of
+  // a signature header is that its value must never be logged).
+  const presentHeaderNames = [
+    req.header("X-Shoper-Webhook-Signature") ? "X-Shoper-Webhook-Signature" : undefined,
+    req.header("X-Shoper-Signature") ? "X-Shoper-Signature" : undefined,
+    webhookId ? "X-Webhook-Id" : undefined,
+    documentedSignatureHeader ? "X-Webhook-SHA1" : undefined,
+  ].filter((name): name is string => Boolean(name));
+
+  if (presentHeaderNames.length === 0) {
     return res.status(401).json({ ok: false, error: "Brak podpisu webhooka." });
   }
 
@@ -256,21 +283,22 @@ const verifyShoperSignature = (req: Request, res: Response, next: NextFunction) 
     return res.status(400).json({ ok: false, error: "Brak treści webhooka." });
   }
 
-  const expected = crypto
-    .createHmac("sha256", env.SHOPER_WEBHOOK_SECRET)
-    .update(req.rawBody)
-    .digest("hex");
-
-  const received = signatureHeader.trim();
-
-  if (
-    received.length !== expected.length ||
-    !crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected))
-  ) {
-    return res.status(401).json({ ok: false, error: "Nieprawidłowy podpis webhooka." });
+  if (verifyDocumentedWebhookSignature(webhookId, documentedSignatureHeader, req.rawBody, env.SHOPER_WEBHOOK_SECRET)) {
+    logSignatureSchemeOnce("documented-sha1");
+    return next();
   }
 
-  return next();
+  if (verifyEventWebhookSignature(hmacSignatureHeader, req.rawBody, env.SHOPER_WEBHOOK_SECRET)) {
+    logSignatureSchemeOnce("hmac-sha256-fallback");
+    return next();
+  }
+
+  console.warn("[Webhooks] Rejected webhook: signature did not validate under either scheme", {
+    path: req.path,
+    presentHeaderNames,
+  });
+
+  return res.status(401).json({ ok: false, error: "Nieprawidłowy podpis webhooka." });
 };
 
 export const webhooksRouter = Router();
@@ -304,7 +332,7 @@ webhooksRouter.post(
 
     if (!parsed.success) {
       console.error("[Webhooks] customer-created validation failed:", parsed.error.issues, "raw keys:", Object.keys(rawBody));
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "customer.created",
         source: "webhook",
         customerId: undefined,
@@ -326,8 +354,9 @@ webhooksRouter.post(
     }
 
     const payload = parsed.data;
-    const snapshot = settingsRepository.getSnapshot();
+    const snapshot = settingsRepository.getSnapshot(shopId);
     const resolution = resolveMappingGroups(
+      shopId,
       "customer.created",
       payload,
       snapshot.defaultGroupIds.registration,
@@ -335,7 +364,7 @@ webhooksRouter.post(
 
     const connection = shopConnectionService.getConnection(shopId);
     if (!connection || connection.status !== "linked" || !connection.idoxxyTokenEncrypted) {
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "customer.created",
         source: "webhook",
         customerId: undefined,
@@ -361,7 +390,7 @@ webhooksRouter.post(
       idoxxyClient = idoxxyService.getClientForShop(shopId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Brak klienta Idoxxy dla sklepu";
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "customer.created",
         source: "webhook",
         customerId: undefined,
@@ -383,7 +412,7 @@ webhooksRouter.post(
     }
 
     if (!resolution) {
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "customer.created",
         source: "webhook",
         customerId: undefined,
@@ -433,7 +462,7 @@ webhooksRouter.post(
         logDetails.mappingUsed = resolution.mapping.name;
       }
 
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "customer.created",
         source: "webhook",
         customerId: ensuredCustomer.id,
@@ -461,7 +490,7 @@ webhooksRouter.post(
         errorLogDetails.mappingUsed = resolution.mapping.name;
       }
 
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "customer.created",
         source: "webhook",
         customerId: undefined,
@@ -511,7 +540,7 @@ webhooksRouter.post(
 
     if (!parsed.success) {
       console.error("[Webhooks] order-created validation failed:", parsed.error.issues, "raw keys:", Object.keys(rawBody));
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "order.created",
         source: "webhook",
         customerId: undefined,
@@ -533,8 +562,9 @@ webhooksRouter.post(
     }
 
     const payload = parsed.data;
-    const snapshot = settingsRepository.getSnapshot();
+    const snapshot = settingsRepository.getSnapshot(shopId);
     const resolution = resolveMappingGroups(
+      shopId,
       "order.created",
       payload,
       snapshot.defaultGroupIds.order,
@@ -543,7 +573,7 @@ webhooksRouter.post(
     const connection = shopConnectionService.getConnection(shopId);
     if (!connection || connection.status !== "linked" || !connection.idoxxyTokenEncrypted) {
       const customerEmailMissingLink = payload.order.email || payload.customer?.email;
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "order.created",
         source: "webhook",
         customerId: undefined,
@@ -570,7 +600,7 @@ webhooksRouter.post(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Brak klienta Idoxxy dla sklepu";
       const customerEmailMissingClient = payload.order.email || payload.customer?.email;
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "order.created",
         source: "webhook",
         customerId: undefined,
@@ -593,7 +623,7 @@ webhooksRouter.post(
 
     if (!resolution) {
       const customerEmail = payload.order.email || payload.customer?.email;
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "order.created",
         source: "webhook",
         customerId: undefined,
@@ -625,7 +655,7 @@ webhooksRouter.post(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nieznany błąd webhooka.";
       const customerEmail = payload.order.email || payload.customer?.email;
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "order.created",
         source: "webhook",
         customerId: undefined,
@@ -665,7 +695,7 @@ webhooksRouter.post(
         logDetails.mappingUsed = resolution.mapping.name;
       }
 
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "order.created",
         source: "webhook",
         customerId: ensuredCustomer.id,
@@ -693,7 +723,7 @@ webhooksRouter.post(
         errorLogDetails.mappingUsed = resolution.mapping.name;
       }
 
-      settingsRepository.addSyncLog({
+      settingsRepository.addSyncLog(shopId, {
         event: "order.created",
         source: "webhook",
         customerId: undefined,

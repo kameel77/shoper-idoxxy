@@ -1,10 +1,28 @@
 node_modules
 dist
-.env
-.env.*
-.env
-.env.*
-planning.md
 *.log
-package-lock.json
 data/
+
+# macOS
+.DS_Store
+
+# Secrets: never commit real values. The template below IS tracked on purpose -
+# it documents which variables exist without carrying any value.
+.env
+.env.*
+!.env.example
+
+# Local-only credentials and test-environment notes (never commit)
+docs/private/
+
+# Project planning notes kept outside the repository
+planning.md
+
+# Lockfile is currently untracked - see README for the trade-off
+package-lock.json
+
+# Generated code-graph analysis output
+graphify-out/
+
+# Scratch area used when moving files in/out of this working copy
+public/_to_delete/

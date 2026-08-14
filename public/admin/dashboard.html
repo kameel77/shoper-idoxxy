@@ -177,6 +177,7 @@
       <ul>
         <li><a href="/admin/dashboard.html" class="active">Dashboard</a></li>
         <li><a href="/settings">Ustawienia (dev)</a></li>
+        <li><a href="/pomoc.html">Pomoc</a></li>
         <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">Idoxxy</a></li>
         <li><button class="logout-btn" id="logoutBtn">Wyloguj</button></li>
       </ul>
@@ -330,7 +331,10 @@
 
       const testConnection = async (shopId) => {
         try {
-          const result = await requestJson(`/settings/link/status/${shopId}`);
+          // /settings/link/status/:shopId now requires a shop session; an
+          // admin operator supplies ?shopId= explicitly to act on the shop
+          // they picked (see requireShopSession's operator override).
+          const result = await requestJson(`/settings/link/status/${shopId}?shopId=${encodeURIComponent(shopId)}`);
           alert(result.ok 
             ? `✅ Status: ${result.status || "OK"}\nWorkspace: ${result.workspaceId || "-"}` 
             : `❌ Błąd: ${result.error}`

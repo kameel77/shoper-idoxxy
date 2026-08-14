@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shoper ↔ iDoxxy – Pomoc i kontakt</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background-color: #f5f7fa;
+        color: #1f2a44;
+      }
+      header {
+        background: linear-gradient(135deg, #1f4b99, #5b8def);
+        color: #fff;
+        padding: 32px 24px;
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      header p {
+        margin: 0;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      nav {
+        background: #0f1f3d;
+        color: #fff;
+      }
+      nav ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      nav a {
+        display: block;
+        padding: 14px 20px;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      nav a:hover,
+      nav a.active {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      main {
+        margin: 32px auto;
+        max-width: 1100px;
+        padding: 0 16px 56px;
+        display: grid;
+        gap: 24px;
+      }
+      section {
+        background: #fff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 22px;
+      }
+      h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+      p {
+        line-height: 1.6;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      .grid.columns-2 {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+      .card {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 18px;
+        background: #f8fafc;
+      }
+      .card p {
+        margin: 0 0 12px;
+        font-size: 14px;
+        color: #475569;
+      }
+      .cta {
+        display: inline-block;
+        padding: 12px 20px;
+        border-radius: 8px;
+        text-decoration: none;
+        background: #1f4b99;
+        color: #fff;
+        font-weight: 600;
+      }
+      .cta:hover {
+        background: #163771;
+      }
+      .cta.secondary {
+        background: #e2e8f0;
+        color: #1f2a44;
+      }
+      .cta.secondary:hover {
+        background: #cbd5e1;
+      }
+      .meta {
+        font-size: 13px;
+        color: #52606d;
+        margin-top: 10px;
+      }
+      dl {
+        margin: 0;
+      }
+      dt {
+        font-weight: 600;
+        margin-top: 16px;
+      }
+      dt:first-child {
+        margin-top: 0;
+      }
+      dd {
+        margin: 6px 0 0;
+        color: #475569;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .notice {
+        border-left: 4px solid #f59e0b;
+        background: #fffbeb;
+        padding: 14px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #78350f;
+      }
+      code {
+        background: #eef2f7;
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 13px;
+      }
+      footer {
+        text-align: center;
+        padding: 24px;
+        color: #52606d;
+        font-size: 14px;
+      }
+      @media (max-width: 720px) {
+        header {
+          padding: 24px 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Pomoc i kontakt</h1>
+      <p>
+        Instrukcja krok po kroku, dane kontaktowe do zespołu iDoxxy oraz szybka
+        diagnostyka najczęstszych problemów z integracją.
+      </p>
+    </header>
+    <nav>
+      <ul>
+        <li><a href="/">Start</a></li>
+        <li><a href="/settings">Panel ustawień</a></li>
+        <li><a href="/customers.html">Klienci</a></li>
+        <li><a href="/pomoc.html" class="active">Pomoc</a></li>
+        <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">iDoxxy</a></li>
+      </ul>
+    </nav>
+    <main>
+      <section>
+        <h2>Instrukcja obsługi (PDF)</h2>
+        <p>
+          Pełna instrukcja konfiguracji: przygotowanie grup i dokumentów w iDoxxy,
+          instalacja aplikacji ze Shoper App Store, połączenie sklepu tokenem
+          workspace’a, grupy domyślne, mapowania zdarzeń oraz test integracji.
+        </p>
+        <a
+          class="cta"
+          href="/docs/instrukcja-shoper-idoxxy.pdf"
+          target="_blank"
+          rel="noreferrer"
+          download="Instrukcja-Shoper-iDoxxy.pdf"
+          >Pobierz instrukcję (PDF)</a
+        >
+        <p class="meta">Format PDF · otwiera się w nowej karcie.</p>
+      </section>
+
+      <section>
+        <h2>Kontakt i dodatkowe informacje</h2>
+        <div class="grid columns-2">
+          <div class="card">
+            <h3>Strona iDoxxy</h3>
+            <p>
+              Opis platformy trwałego nośnika, zakres funkcji, cennik oraz materiały
+              o obowiązku dostarczania dokumentów na trwałym nośniku.
+            </p>
+            <a class="cta secondary" href="https://idoxxy.com" target="_blank" rel="noreferrer"
+              >idoxxy.com</a
+            >
+          </div>
+          <div class="card">
+            <h3>Wsparcie e-mail</h3>
+            <p>
+              Pytania o konfigurację, integrację ze sklepem lub zgłoszenia problemów
+              kierujemy na adres wsparcia.
+            </p>
+            <a class="cta secondary" href="mailto:hello@idoxxy.com">hello@idoxxy.com</a>
+          </div>
+        </div>
+        <p class="meta">
+          Zgłaszając problem, podaj identyfikator sklepu (Shop ID), przybliżoną datę
+          i godzinę zdarzenia oraz nazwę zdarzenia (np. <code>customer.created</code>).
+          Skraca to czas diagnozy.
+        </p>
+        <p class="notice" style="margin-top: 16px">
+          Nigdy nie przesyłaj tokenu iDoxxy, haseł ani danych dostępowych w wiadomości
+          e-mail ani w zgłoszeniu. Zespół wsparcia nigdy nie prosi o te dane.
+        </p>
+      </section>
+
+      <section>
+        <h2>Szybka diagnostyka</h2>
+        <dl>
+          <dt>„Sklep nie jest połączony z iDoxxy”</dt>
+          <dd>
+            Sklep jest zainstalowany, ale brakuje zapisanego tokenu workspace’a.
+            Przejdź do <a href="/settings">Panelu ustawień</a>, wklej token iDoxxy,
+            użyj przycisku <em>Testuj połączenie</em>, a następnie <em>Połącz</em>.
+          </dd>
+
+          <dt>Token nieprawidłowy lub brak dostępu do workspace’a</dt>
+          <dd>
+            Token wygasł, został unieważniony albo należy do innego workspace’a.
+            Wygeneruj nowy token w iDoxxy (Zarządzanie tokenami API) i zapisz go
+            ponownie w panelu ustawień.
+          </dd>
+
+          <dt>Klienci nie trafiają do grup</dt>
+          <dd>
+            Sprawdź, czy dla zdarzenia istnieje aktywna reguła mapowania albo czy
+            ustawione są grupy domyślne (osobno dla rejestracji i dla zamówienia).
+            Bez żadnej z tych opcji wtyczka nie ma dokąd przypisać klienta.
+          </dd>
+
+          <dt>Grupy lub dokumenty nie ładują się na listach</dt>
+          <dd>
+            Listy pobierane są z iDoxxy w kontekście połączonego sklepu. Upewnij się,
+            że w iDoxxy istnieją aktywne grupy odbiorców i dokumenty, a połączenie ma
+            status <em>linked</em>.
+          </dd>
+
+          <dt>Problem nie ustępuje</dt>
+          <dd>
+            Napisz na <a href="mailto:hello@idoxxy.com">hello@idoxxy.com</a> —
+            dołącz Shop ID oraz opis kroków, które doprowadziły do błędu.
+          </dd>
+        </dl>
+      </section>
+    </main>
+    <footer>
+      © iDoxxy · Integracja Shoper ↔ iDoxxy ·
+      <a href="https://idoxxy.com" target="_blank" rel="noreferrer">idoxxy.com</a> ·
+      <a href="mailto:hello@idoxxy.com">hello@idoxxy.com</a>
+    </footer>
+  </body>
+</html>

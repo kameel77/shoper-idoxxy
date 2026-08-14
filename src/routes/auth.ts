@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { userRepository } from "../repositories/userRepository";
 import { requireApiAuth } from "../middleware/auth";
+import { loginRateLimiter } from "../middleware/rateLimit";
 
 export const authRouter = Router();
 
@@ -15,8 +16,10 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(6),
 });
 
-// POST /auth/login
-authRouter.post("/login", async (req: Request, res: Response) => {
+// POST /auth/login - strictly rate limited (see src/middleware/rateLimit.ts):
+// verifies a bcrypt password hash and would otherwise be freely
+// brute-forceable.
+authRouter.post("/login", loginRateLimiter, async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
 
   if (!parsed.success) {

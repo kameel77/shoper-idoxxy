@@ -179,6 +179,7 @@
         <li><a href="/">Start</a></li>
         <li><a href="/settings">Panel ustawień</a></li>
         <li><a href="/customers.html" class="active">Klienci</a></li>
+        <li><a href="/pomoc.html">Pomoc</a></li>
         <li><a href="https://idoxxy.com" target="_blank" rel="noreferrer">iDoxxy</a></li>
       </ul>
     </nav>
@@ -247,7 +248,11 @@
       let currentPage = 1;
       let totalPages = 1;
       let groupOptions = [];
-      let activeShopId = null;
+      // Shop identity comes from the server-side session (set during Shoper
+      // OAuth install) - the client never supplies it. Mutating requests
+      // (POST/PUT/DELETE) additionally require the double-submit CSRF token
+      // fetched once via /settings/csrf.
+      let csrfToken = null;
 
       // Simple hash function to assign consistent colors to groups
       const getGroupColorClass = (groupName) => {
@@ -261,18 +266,15 @@
       };
 
       const requestJson = async (path, options = {}) => {
-        let url = `${apiBase}${path}`;
-        if (activeShopId) {
-          const sep = url.includes("?") ? "&" : "?";
-          url += `${sep}shopId=${encodeURIComponent(activeShopId)}`;
+        const method = (options.method || "GET").toUpperCase();
+        const headers = {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        };
+        if (csrfToken && method !== "GET") {
+          headers["X-CSRF-Token"] = csrfToken;
         }
-        const response = await fetch(url, {
-          headers: {
-            "Content-Type": "application/json",
-            ...(options.headers || {}),
-          },
-          ...options,
-        });
+        const response = await fetch(`${apiBase}${path}`, { ...options, headers });
         if (!response.ok) {
           const message = await response.text();
           throw new Error(message || `Błąd ${response.status}`);
@@ -445,20 +447,17 @@
         }
       });
 
-      // Resolve shop context first, then load data
+      // Fetch the CSRF token for this shop session before doing anything
+      // mutating. Shop identity itself comes from the session server-side.
       const initShopContext = async () => {
         try {
-          const resp = await fetch("/settings/connections");
+          const resp = await fetch("/settings/csrf");
           if (resp.ok) {
             const data = await resp.json();
-            const connections = data.connections || [];
-            const linked = connections.find(c => c.status === "linked");
-            if (linked) {
-              activeShopId = linked.shopId;
-            }
+            csrfToken = data && data.csrfToken;
           }
         } catch (e) {
-          console.warn("[customers] Could not resolve shop context", e);
+          console.warn("[customers] Could not fetch CSRF token", e);
         }
       };
 
