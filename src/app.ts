@@ -236,13 +236,10 @@ export const createApp = () => {
 
   // Bootstrap (or validate) the operator/admin account - see
   // src/repositories/userRepository.ts's bootstrapAdminAccount() doc comment.
-  // Deliberately NOT wrapped in try/catch: in production this can throw
-  // (missing/weak ADMIN_PASSWORD is already caught earlier by
-  // src/config/env.ts at import time; this catches the case of an existing
-  // account still holding the legacy default password), and createApp() is
-  // meant to propagate that synchronously so the process never starts
-  // listening - the same fail-fast posture as every other production secret
-  // check in this codebase.
+  // Any active admin account still holding the legacy default password
+  // ("admin123") gets its password rotated to ADMIN_PASSWORD here rather
+  // than blocking startup - refusing to boot would leave the operator with
+  // no in-band way to fix it, since logging in requires a running app.
   userRepository.bootstrapAdminAccount();
 
   return app;

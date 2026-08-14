@@ -140,7 +140,7 @@ describe("bootstrapAdminAccount - account creation", () => {
 });
 
 describe("bootstrapAdminAccount - legacy default-password guard (production only)", () => {
-  it("refuses to start when an existing active admin account still holds the historic default password", async () => {
+  it("rotates the password of an existing active admin account still holding the historic default password, and boots", async () => {
     const dbPath = makeTempPath("legacy");
     createdPaths.push(dbPath);
 
@@ -162,9 +162,11 @@ describe("bootstrapAdminAccount - legacy default-password guard (production only
     const stage1Db = await import("../src/config/database");
     stage1Db.db.close();
 
-    // Stage 2 (production): even with a strong ADMIN_PASSWORD configured,
-    // startup must refuse because the *existing* account is still weak - a
-    // config change alone does not fix an already-provisioned account.
+    // Stage 2 (production): with a strong ADMIN_PASSWORD configured, startup
+    // must succeed and the *existing* weak account must be rotated onto that
+    // configured password - a config change alone previously did not fix an
+    // already-provisioned account, and refusing to boot here left the
+    // operator with no in-band way to fix it either.
     vi.resetModules();
     process.env.NODE_ENV = "production";
     process.env.DATABASE_PATH = dbPath;
@@ -172,10 +174,121 @@ describe("bootstrapAdminAccount - legacy default-password guard (production only
     Object.assign(process.env, VALID_PRODUCTION_SECRETS);
 
     const { createApp } = await import("../src/app");
-    expect(() => createApp()).toThrow(/hasł/i);
+    const app = createApp();
+    const server = createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const address = server.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
+
+    try {
+      const rotatedRes = await fetch(`http://127.0.0.1:${port}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "admin", password: "a-brand-new-strong-password-here" }),
+      });
+      const rotatedBody = await rotatedRes.json();
+      expect(rotatedRes.status).toBe(200);
+      expect(rotatedBody.ok).toBe(true);
+      expect(rotatedBody.user.username).toBe("admin");
+
+      const legacyRes = await fetch(`http://127.0.0.1:${port}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "admin", password: "admin123" }),
+      });
+      expect(legacyRes.status).toBe(401);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
 
     const stage2 = await import("../src/config/database");
     stage2.db.close();
+  });
+
+  it("rotates every active admin still holding the legacy default password, not just ADMIN_USERNAME", async () => {
+    const dbPath = makeTempPath("legacy-multi");
+    createdPaths.push(dbPath);
+
+    vi.resetModules();
+    process.env.NODE_ENV = "development";
+    process.env.DATABASE_PATH = dbPath;
+    delete process.env.ADMIN_USERNAME;
+    delete process.env.ADMIN_PASSWORD;
+    const stage1 = await import("../src/repositories/userRepository");
+    await stage1.userRepository.createUser({
+      username: "admin",
+      email: "admin@shoper-idoxxy.local",
+      password: "admin123",
+      role: "admin",
+    });
+    await stage1.userRepository.createUser({
+      username: "second-admin",
+      email: "second-admin@shoper-idoxxy.local",
+      password: "admin123",
+      role: "admin",
+    });
+    const stage1Db = await import("../src/config/database");
+    stage1Db.db.close();
+
+    vi.resetModules();
+    process.env.NODE_ENV = "production";
+    process.env.DATABASE_PATH = dbPath;
+    process.env.ADMIN_PASSWORD = "a-brand-new-strong-password-here";
+    Object.assign(process.env, VALID_PRODUCTION_SECRETS);
+
+    const { createApp } = await import("../src/app");
+    expect(() => createApp()).not.toThrow();
+
+    const stage2 = await import("../src/repositories/userRepository");
+    const first = stage2.userRepository.getByUsername("admin")!;
+    const second = stage2.userRepository.getByUsername("second-admin")!;
+
+    expect(await stage2.userRepository.validatePassword(first, "a-brand-new-strong-password-here")).toBe(true);
+    expect(await stage2.userRepository.validatePassword(first, "admin123")).toBe(false);
+    expect(await stage2.userRepository.validatePassword(second, "a-brand-new-strong-password-here")).toBe(true);
+    expect(await stage2.userRepository.validatePassword(second, "admin123")).toBe(false);
+
+    const stage2Db = await import("../src/config/database");
+    stage2Db.db.close();
+  });
+
+  it("never touches an admin account with a strong, non-default password, even when it differs from ADMIN_PASSWORD", async () => {
+    const dbPath = makeTempPath("legacy-untouched");
+    createdPaths.push(dbPath);
+
+    vi.resetModules();
+    process.env.NODE_ENV = "development";
+    process.env.DATABASE_PATH = dbPath;
+    delete process.env.ADMIN_USERNAME;
+    delete process.env.ADMIN_PASSWORD;
+    const stage1 = await import("../src/repositories/userRepository");
+    const created = await stage1.userRepository.createUser({
+      username: "careful-admin",
+      email: "careful-admin@shoper-idoxxy.local",
+      password: "already-a-strong-operator-chosen-password",
+      role: "admin",
+    });
+    const hashBeforeBoot = created.passwordHash;
+    const stage1Db = await import("../src/config/database");
+    stage1Db.db.close();
+
+    vi.resetModules();
+    process.env.NODE_ENV = "production";
+    process.env.DATABASE_PATH = dbPath;
+    process.env.ADMIN_PASSWORD = "a-totally-different-strong-password-1234";
+    Object.assign(process.env, VALID_PRODUCTION_SECRETS);
+
+    const { createApp } = await import("../src/app");
+    expect(() => createApp()).not.toThrow();
+
+    const stage2 = await import("../src/repositories/userRepository");
+    const user = stage2.userRepository.getByUsername("careful-admin")!;
+    expect(user.passwordHash).toBe(hashBeforeBoot);
+    expect(await stage2.userRepository.validatePassword(user, "already-a-strong-operator-chosen-password")).toBe(true);
+    expect(await stage2.userRepository.validatePassword(user, "a-totally-different-strong-password-1234")).toBe(false);
+
+    const stage2Db = await import("../src/config/database");
+    stage2Db.db.close();
   });
 
   it("boots normally in production when the existing admin account's password has been changed", async () => {
@@ -274,6 +387,55 @@ describe("no code path logs a password", () => {
     );
     expect(allLoggedText).not.toContain(secretPassword);
     expect(allLoggedText).not.toContain("admin123");
+
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+
+    const dbModule = await import("../src/config/database");
+    dbModule.db.close();
+  });
+
+  it("never logs the old or new password when rotating a legacy-default admin account", async () => {
+    const dbPath = makeTempPath("no-log-rotation");
+    createdPaths.push(dbPath);
+    const rotatedToPassword = "rotated-in-strong-password-1234567890";
+
+    vi.resetModules();
+    process.env.NODE_ENV = "development";
+    process.env.DATABASE_PATH = dbPath;
+    delete process.env.ADMIN_USERNAME;
+    delete process.env.ADMIN_PASSWORD;
+    const stage1 = await import("../src/repositories/userRepository");
+    await stage1.userRepository.createUser({
+      username: "admin",
+      email: "admin@shoper-idoxxy.local",
+      password: "admin123",
+      role: "admin",
+    });
+    const stage1Db = await import("../src/config/database");
+    stage1Db.db.close();
+
+    vi.resetModules();
+    process.env.NODE_ENV = "production";
+    process.env.DATABASE_PATH = dbPath;
+    process.env.ADMIN_PASSWORD = rotatedToPassword;
+    Object.assign(process.env, VALID_PRODUCTION_SECRETS);
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const { createApp } = await import("../src/app");
+    expect(() => createApp()).not.toThrow();
+
+    const allLoggedText = JSON.stringify(
+      [...logSpy.mock.calls, ...warnSpy.mock.calls, ...errorSpy.mock.calls].flat(),
+    );
+    expect(allLoggedText).not.toContain(rotatedToPassword);
+    expect(allLoggedText).not.toContain("admin123");
+    // The rotation notice itself must still be present (username, not password).
+    expect(allLoggedText).toMatch(/admin/);
 
     logSpy.mockRestore();
     warnSpy.mockRestore();

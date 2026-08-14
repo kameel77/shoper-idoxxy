@@ -32,10 +32,11 @@ services:
       # - ADMIN_USERNAME (opcjonalne, domyślnie "admin")
       # - ADMIN_PASSWORD (Wymagane! min. 16 znaków - konto administratora ma dostęp
       #   do połączeń wszystkich sklepów (GET /settings/link/connections) i może
-      #   działać na dowolnym sklepie przez ?shopId=. Bez silnego hasła - lub jeśli
-      #   istniejące konto administratora nadal używa starego domyślnego hasła -
-      #   aplikacja NIE uruchomi się na produkcji - patrz src/config/env.ts i
-      #   src/repositories/userRepository.ts)
+      #   działać na dowolnym sklepie przez ?shopId=. Bez silnego hasła aplikacja
+      #   NIE uruchomi się na produkcji - patrz src/config/env.ts. Jeśli istniejące
+      #   konto administratora nadal używa starego domyślnego hasła, zostanie ono
+      #   przy starcie automatycznie zrotowane na wartość ADMIN_PASSWORD (aplikacja
+      #   uruchamia się normalnie) - patrz src/repositories/userRepository.ts)
       # - SYNC_LOG_RETENTION_DAYS (opcjonalne, domyślnie 90; dodatnia liczba całkowita,
       #   0 jest odrzucane - RODO: okres przechowywania e-maili klientów sklepu w sync_logs)
       # - UNINSTALL_PURGE_GRACE_DAYS (opcjonalne, domyślnie 30; dodatnia liczba całkowita -

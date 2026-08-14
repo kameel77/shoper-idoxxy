@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcrypt";
 import { db } from "../config/database";
-import { env, isProduction } from "../config/env";
+import { env } from "../config/env";
 
 const SALT_ROUNDS = 10;
 
@@ -11,8 +11,9 @@ const SALT_ROUNDS = 10;
  * refuses to boot in production without a strong ADMIN_PASSWORD, so this
  * branch is unreachable there). This is the same historic value the account
  * used to be hardcoded to - kept for continuity of local dev workflows and,
- * not incidentally, as the exact value bootstrapAdminAccount() checks
- * existing production accounts against below (see its doc comment).
+ * not incidentally, as the exact value bootstrapAdminAccount() checks *every*
+ * active admin account against below, to catch and rotate accounts left over
+ * from that old hardcoded-default behaviour (see its doc comment).
  *
  * NEVER log this constant or any password derived from it - see
  * bootstrapAdminAccount()'s warnings, which intentionally omit the value.
@@ -128,48 +129,60 @@ class UserRepository {
   /**
    * Bootstrap (or validate) the operator/admin account from
    * ADMIN_USERNAME/ADMIN_PASSWORD (src/config/env.ts). Runs synchronously
-   * (bcrypt's *Sync API, not bcrypt.hash/compare) specifically so a
-   * production-only failure here can throw synchronously out of createApp()
-   * (src/app.ts) and abort startup before app.listen() is ever reached -
-   * the same fail-fast posture as the SESSION_SECRET/SHOPER_WEBHOOK_SECRET/
-   * TOKEN_ENCRYPTION_KEY checks in src/config/env.ts, just one layer later
-   * because this one needs a database read, not just an env var read.
+   * (bcrypt's *Sync API, not bcrypt.hash/compare) so it can be called
+   * plainly from createApp() (src/app.ts) before app.listen(), like every
+   * other startup step there.
    *
    * Ordering, both deliberate:
-   *  1. In production, refuse to start if ANY active admin-role account
-   *     still holds the historic hardcoded default password ("admin123").
-   *     This is independent of ADMIN_USERNAME/ADMIN_PASSWORD and of whether
-   *     this function would create a new account this run - it exists
-   *     specifically to catch a deployment that already has that weak
-   *     account from before this change, which setting ADMIN_PASSWORD alone
-   *     would not fix (this function never overwrites an existing account's
-   *     password - see step 2).
-   *  2. If a user with ADMIN_USERNAME already exists, leave it untouched -
+   *  1. Rotate first: for every active admin-role account whose password
+   *     still matches the historic hardcoded default ("admin123"), replace
+   *     its password hash with one derived from ADMIN_PASSWORD and log
+   *     (never the password itself) that the rotation happened. This
+   *     exists to unwedge deployments created by an older build that used
+   *     to auto-create "admin"/"admin123" on every boot: an earlier version
+   *     of this function refused to start in that situation, which sounded
+   *     secure but was actually a deadlock - the operator's only recovery
+   *     path ("log in and change it") requires a running app, and there was
+   *     no in-band way out. Rotating is safe precisely because, at the
+   *     moment we detect the weak account, we are already holding the
+   *     strong replacement the operator configured via ADMIN_PASSWORD
+   *     (mandatory and >=16 chars in production - see src/config/env.ts).
+   *     Accounts whose password is NOT the legacy default are never
+   *     touched here - an operator who already set a good password must
+   *     not have it silently overwritten by ADMIN_PASSWORD.
+   *     In production ADMIN_PASSWORD is always present and valid by the
+   *     time this runs (env.ts throws first otherwise), so rotation always
+   *     has somewhere to rotate to. Outside production, if ADMIN_PASSWORD
+   *     isn't set there is nothing configured to rotate to, so matching
+   *     accounts are left as-is - the sane-local-dev branch.
+   *  2. If a user with ADMIN_USERNAME already exists (checked after step 1,
+   *     so this sees any rotation that just happened), leave it untouched -
    *     never silently overwrite an existing admin's password on boot.
    *     Otherwise create it with ADMIN_PASSWORD (or, outside production
    *     only, DEV_ONLY_DEFAULT_ADMIN_PASSWORD - env.ts already refuses to
    *     boot in production without a strong ADMIN_PASSWORD, so the
    *     production branch never falls through to the dev fallback).
    *
-   * Never logs a password, hash, or session/token value - see the two
-   * console.log calls this replaced, which used to print the plaintext
-   * default password.
+   * Never logs a password, hash, or session/token value - see the
+   * console.warn/console.log calls below, which intentionally omit the
+   * value in every case (including the rotation notice).
    */
   bootstrapAdminAccount(): void {
-    if (isProduction) {
-      const legacyDefaultPasswordStillInUse = this.getAllUsers().some(
+    const rotationPassword = env.ADMIN_PASSWORD;
+    if (rotationPassword) {
+      const legacyPasswordAdmins = this.getAllUsers().filter(
         (user) =>
           user.role === "admin" &&
           user.isActive &&
           bcrypt.compareSync(DEV_ONLY_DEFAULT_ADMIN_PASSWORD, user.passwordHash),
       );
-      if (legacyDefaultPasswordStillInUse) {
-        throw new Error(
-          "Wykryto aktywne konto administratora nadal używające domyślnego hasła z poprzedniej wersji aplikacji. " +
-            "Ze względów bezpieczeństwa aplikacja NIE uruchomi się w środowisku produkcyjnym, dopóki hasło tego konta " +
-            "nie zostanie zmienione (zaloguj się i użyj POST /auth/change-password, albo zaktualizuj password_hash " +
-            "bezpośrednio w bazie danych) - samo ustawienie ADMIN_PASSWORD tego nie naprawi, ponieważ istniejące " +
-            "konto nigdy nie jest nadpisywane przy starcie.",
+      for (const user of legacyPasswordAdmins) {
+        const passwordHash = bcrypt.hashSync(rotationPassword, SALT_ROUNDS);
+        const now = Date.now();
+        updatePasswordStmt.run(passwordHash, now, user.id);
+        console.warn(
+          `[UserRepository] Konto administratora "${user.username}" używało domyślnego hasła znanego z poprzedniej ` +
+            "wersji aplikacji - hasło zostało automatycznie zrotowane na wartość skonfigurowaną w ADMIN_PASSWORD.",
         );
       }
     }
@@ -177,7 +190,7 @@ class UserRepository {
     const existingConfiguredAdmin = this.getByUsername(env.ADMIN_USERNAME);
     if (existingConfiguredAdmin) {
       // Already bootstrapped in a previous run (or created/renamed by an
-      // operator) - never overwrite its password here.
+      // operator, or just rotated above) - never overwrite its password here.
       return;
     }
 
