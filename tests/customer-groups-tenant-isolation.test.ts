@@ -199,11 +199,19 @@ beforeAll(async () => {
 
         if (method === "get" && url === "/groups/list-customers-with-groups") {
           const customerId = reqConfig.params?.searchQuery;
-          const groups = backendFor(apiKey).get(customerId) ?? [];
-          const content = customerId
-            ? [{ id: customerId, email: `${customerId}@example.com`, customerGroups: groups }]
-            : [];
-          return { data: { content }, status: 200, config: reqConfig, headers: {} };
+          const backend = backendFor(apiKey);
+          let content: any[] = [];
+          if (customerId) {
+            const groups = backend.get(customerId) ?? [];
+            content = [{ id: customerId, email: `${customerId}@example.com`, customerGroups: groups }];
+          } else {
+            content = Array.from(backend.entries()).map(([cId, groups]) => ({
+              id: cId,
+              email: `${cId}@example.com`,
+              customerGroups: groups,
+            }));
+          }
+          return { data: { content, totalPages: 1, last: true }, status: 200, config: reqConfig, headers: {} };
         }
 
         if (method === "get" && /^\/groups\/[^/]+$/.test(url)) {

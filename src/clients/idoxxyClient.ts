@@ -73,6 +73,9 @@ type PageResponse<T> = {
   totalPages?: number;
   size?: number;
   number?: number;
+  last?: boolean;
+  first?: boolean;
+  empty?: boolean;
 };
 
 type UpdateGroupRequest = {
@@ -380,12 +383,40 @@ export class IdoxxyClient {
   }
 
   async getCustomerGroups(customerId: string) {
-    const response = await this.listCustomersWithGroups({
+    // 1. Try direct search (works when customerId is matched or in tests)
+    const direct = await this.listCustomersWithGroups({
       search: customerId,
-      size: 1,
+      size: 10,
     });
+    const match = (direct.content || []).find((customer) => customer.id === customerId);
+    if (match) {
+      return match;
+    }
 
-    return response.content.find((customer) => customer.id === customerId);
+    // 2. Fallback: paginate through customers list if remote search only filters by name/email
+    let page = 0;
+    const size = 50;
+    while (page < 10) {
+      const response = await this.listCustomersWithGroups({
+        page,
+        size,
+      });
+      const content = response.content || [];
+      const found = content.find((customer) => customer.id === customerId);
+      if (found) {
+        return found;
+      }
+      if (
+        response.last ||
+        content.length < size ||
+        (response.totalPages !== undefined && page >= response.totalPages - 1)
+      ) {
+        break;
+      }
+      page++;
+    }
+
+    return undefined;
   }
 
   async addCustomersToGroup(groupId: string, customerIds: string[]) {
