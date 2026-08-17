@@ -330,10 +330,27 @@ idoxxyAdminRouter.post("/customers/bulk", requireCsrf, async (req: Request, res:
               }
             }
 
+            // Fetch customer documents to resolve uniqueLinks for durable medium
+            const uniqueLinkMap = new Map<string, string>();
+            try {
+              const custDocsResponse = await client.getCustomerDocuments("");
+              for (const company of custDocsResponse || []) {
+                for (const d of company.documents || []) {
+                  const link = d.currentVersion?.uniqueLink || (d.versions && d.versions[0]?.uniqueLink);
+                  if (link) {
+                    uniqueLinkMap.set(d.id, link);
+                  }
+                }
+              }
+            } catch (custDocErr) {
+              // eslint-disable-next-line no-console
+              console.warn("[IdoxxyAdmin] Could not fetch customer documents with uniqueLinks:", custDocErr);
+            }
+
             const formattedDocs = docsToSend
               .map((doc: any) => ({
                 name: doc.documentName || doc.name || "Regulamin sklepu",
-                uniqueLink: doc.currentVersion?.uniqueLink || doc.uniqueLink,
+                uniqueLink: uniqueLinkMap.get(doc.id) || doc.currentVersion?.uniqueLink || doc.uniqueLink,
                 validTo: doc.currentVersion?.validTo,
               }))
               .filter((d: any) => Boolean(d.uniqueLink));

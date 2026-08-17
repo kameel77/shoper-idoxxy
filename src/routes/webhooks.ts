@@ -83,10 +83,27 @@ async function dispatchCustomerDocumentsEmail(
         }
       }
 
+      // Fetch customer documents to resolve uniqueLinks for durable medium
+      const uniqueLinkMap = new Map<string, string>();
+      try {
+        const custDocsResponse = await idoxxyClient.getCustomerDocuments("");
+        for (const company of custDocsResponse || []) {
+          for (const d of company.documents || []) {
+            const link = d.currentVersion?.uniqueLink || (d.versions && d.versions[0]?.uniqueLink);
+            if (link) {
+              uniqueLinkMap.set(d.id, link);
+            }
+          }
+        }
+      } catch (custDocErr) {
+        // eslint-disable-next-line no-console
+        console.warn("[Webhooks] Could not fetch customer documents with uniqueLinks:", custDocErr);
+      }
+
       const formattedDocs = docsForEmail
         .map((doc: any) => ({
           name: doc.documentName || doc.name || "Regulamin sklepu",
-          uniqueLink: doc.currentVersion?.uniqueLink || doc.uniqueLink,
+          uniqueLink: uniqueLinkMap.get(doc.id) || doc.currentVersion?.uniqueLink || doc.uniqueLink,
           validTo: doc.currentVersion?.validTo,
         }))
         .filter((d: any) => Boolean(d.uniqueLink));
@@ -104,6 +121,9 @@ async function dispatchCustomerDocumentsEmail(
 
         // eslint-disable-next-line no-console
         console.info(`[Webhooks] Sent durable medium documents email to ${customer.email}:`, emailResult);
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn(`[Webhooks] No documents with uniqueLink found to send to ${customer.email}`);
       }
     }
   } catch (emailErr) {
