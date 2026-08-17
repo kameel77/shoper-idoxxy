@@ -319,29 +319,43 @@ idoxxyAdminRouter.post("/customers/bulk", requireCsrf, async (req: Request, res:
               doc.recipients?.some((recipient: any) => customerGroupIds.has(recipient.id))
             );
 
-            if (matchedDocs.length === 0) {
-              console.info(`[IdoxxyAdmin] No group match for ${customerData.email}, sending all ${allDocuments.length} documents`);
-              for (const doc of allDocuments) {
-                await idoxxyService.resendDocumentNotification(doc.id, [customerData.email], client);
+            const docsToSend = matchedDocs.length > 0 ? matchedDocs : allDocuments;
+
+            for (const doc of docsToSend) {
+              try {
+                await idoxxyService.assignDocumentToGroup(doc.id, Array.from(customerGroupIds), [customerId], client);
+              } catch (assignErr) {
+                // eslint-disable-next-line no-console
+                console.warn(`[IdoxxyAdmin] assignDocumentToGroup warning for ${doc.id}:`, assignErr);
               }
-              results.push({
-                customerId,
-                email: customerData.email,
-                status: "sent",
-                documents: allDocuments.map((d: any) => d.documentName),
-              });
-            } else {
-              console.info(`[IdoxxyAdmin] Matched ${matchedDocs.length} documents for ${customerData.email}`);
-              for (const doc of matchedDocs) {
-                await idoxxyService.resendDocumentNotification(doc.id, [customerData.email], client);
-              }
-              results.push({
-                customerId,
-                email: customerData.email,
-                status: "sent",
-                documents: matchedDocs.map((d: any) => d.documentName),
+            }
+
+            const formattedDocs = docsToSend
+              .map((doc: any) => ({
+                name: doc.documentName || doc.name || "Regulamin sklepu",
+                uniqueLink: doc.currentVersion?.uniqueLink || doc.uniqueLink,
+                validTo: doc.currentVersion?.validTo,
+              }))
+              .filter((d: any) => Boolean(d.uniqueLink));
+
+            if (formattedDocs.length > 0) {
+              const connection = req.shopId ? shopConnectionService.getConnection(req.shopId) : undefined;
+              const shopDisplayName = connection?.shopUrl?.replace(/^https?:\/\//, "") || "Sklep Shoper";
+
+              await emailService.sendDocumentsEmail({
+                to: customerData.email,
+                customerName: [customerData.firstName, customerData.lastName].filter(Boolean).join(" ") || undefined,
+                shopName: shopDisplayName,
+                documents: formattedDocs,
               });
             }
+
+            results.push({
+              customerId,
+              email: customerData.email,
+              status: "sent",
+              documents: docsToSend.map((d: any) => d.documentName),
+            });
           } catch (error) {
             const message = error instanceof Error ? error.message : "Nieznany błąd";
             results.push({ customerId, status: "error", error: message });

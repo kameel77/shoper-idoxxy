@@ -6,6 +6,8 @@ import { settingsRepository } from "../repositories/settingsRepository";
 import type { EventMapping } from "../types/settings";
 import { IdoxxyService } from "../services/idoxxyService";
 import { shopConnectionService } from "../services/shopConnectionService";
+import { emailService } from "../services/emailService";
+import type { IdoxxyClient } from "../clients/idoxxyClient";
 import { verifyEventWebhookSignature, verifyDocumentedWebhookSignature } from "../middleware/shoperSignature";
 
 type MappingResolution = {
@@ -50,6 +52,65 @@ const orderCreatedSchema = z
       .optional(),
   })
   .passthrough();
+
+async function dispatchCustomerDocumentsEmail(
+  shopId: string,
+  customer: CustomerPayload,
+  customerId: string,
+  groupIds: string[],
+  idoxxyClient: IdoxxyClient,
+) {
+  try {
+    const allDocsResponse = await idoxxyClient.listDocuments();
+    const allDocuments = Array.isArray(allDocsResponse)
+      ? allDocsResponse
+      : (allDocsResponse as { content?: unknown[] })?.content || [];
+
+    const customerGroupSet = new Set(groupIds);
+    const matchedDocs = allDocuments.filter((doc: any) =>
+      doc.recipients?.some((recipient: any) => customerGroupSet.has(recipient.id))
+    );
+
+    const docsForEmail = matchedDocs.length > 0 ? matchedDocs : allDocuments;
+
+    if (docsForEmail.length > 0) {
+      for (const doc of docsForEmail) {
+        try {
+          await idoxxyService.assignDocumentToGroup(doc.id, groupIds, [customerId], idoxxyClient);
+        } catch (assignErr) {
+          // eslint-disable-next-line no-console
+          console.warn(`[Webhooks] Could not assign document ${doc.id} to customer ${customerId}:`, assignErr);
+        }
+      }
+
+      const formattedDocs = docsForEmail
+        .map((doc: any) => ({
+          name: doc.documentName || doc.name || "Regulamin sklepu",
+          uniqueLink: doc.currentVersion?.uniqueLink || doc.uniqueLink,
+          validTo: doc.currentVersion?.validTo,
+        }))
+        .filter((d: any) => Boolean(d.uniqueLink));
+
+      if (formattedDocs.length > 0) {
+        const connection = shopConnectionService.getConnection(shopId);
+        const shopDisplayName = connection?.shopUrl?.replace(/^https?:\/\//, "") || "Sklep Shoper";
+
+        const emailResult = await emailService.sendDocumentsEmail({
+          to: customer.email,
+          customerName: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || undefined,
+          shopName: shopDisplayName,
+          documents: formattedDocs,
+        });
+
+        // eslint-disable-next-line no-console
+        console.info(`[Webhooks] Sent durable medium documents email to ${customer.email}:`, emailResult);
+      }
+    }
+  } catch (emailErr) {
+    // eslint-disable-next-line no-console
+    console.error("[Webhooks] Failed to send documents email:", emailErr);
+  }
+}
 
 const resolvePayloadValue = (payload: unknown, field: string): unknown => {
   if (!payload || typeof payload !== "object") {
@@ -451,6 +512,8 @@ webhooksRouter.post(
         );
       }
 
+      await dispatchCustomerDocumentsEmail(shopId, customer, ensuredCustomer.id, groupIds, idoxxyClient);
+
       const logDetails = {
         groupsAssigned: groupIds,
         sourceUsed: resolution?.source,
@@ -655,6 +718,8 @@ webhooksRouter.post(
           idoxxyClient,
         );
       }
+
+      await dispatchCustomerDocumentsEmail(shopId, customer, ensuredCustomer.id, groupIds, idoxxyClient);
 
       const logDetails = {
         groupsAssigned: groupIds,
