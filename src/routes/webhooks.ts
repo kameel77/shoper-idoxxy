@@ -312,9 +312,11 @@ const verifyShoperSignature = (req: Request, res: Response, next: NextFunction) 
 export const webhooksRouter = Router();
 
 webhooksRouter.post(
-  "/shoper/customer-created",
+  ["/shoper/customer-created", "/customer-created", "/shoper/customer.created", "/customer.created"],
   verifyShoperSignature,
   async (req: Request, res: Response) => {
+    // eslint-disable-next-line no-console
+    console.info(`[Webhooks] Received customer webhook on ${req.path}`);
 
     const startTime = Date.now();
     const shopId = resolveShopId(req);
@@ -487,9 +489,11 @@ webhooksRouter.post(
 );
 
 webhooksRouter.post(
-  "/shoper/order-created",
+  ["/shoper/order-created", "/shoper/order-paid", "/order-created", "/order-paid", "/shoper/order.created", "/shoper/order.paid", "/order.paid", "/order.created"],
   verifyShoperSignature,
   async (req: Request, res: Response) => {
+    // eslint-disable-next-line no-console
+    console.info(`[Webhooks] Received order webhook on ${req.path}`);
 
     const startTime = Date.now();
     const shopId = resolveShopId(req);
