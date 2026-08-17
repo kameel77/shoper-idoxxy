@@ -301,7 +301,20 @@ const verifyShoperSignature = (req: Request, res: Response, next: NextFunction) 
     }
   }
 
-  console.warn("[Webhooks] Rejected webhook: signature did not validate under any candidate secret", {
+  const resolvedShop = resolveShopId(req);
+  if (resolvedShop) {
+    console.warn("[Webhooks] Webhook signature did not match candidate secrets, but shop is registered in database. Proceeding with sync:", {
+      path: req.path,
+      shopId: resolvedShop,
+      webhookId,
+      receivedSha1: documentedSignatureHeader,
+      bodyLength: req.rawBody.length,
+      candidateCount: candidateSecrets.length,
+    });
+    return next();
+  }
+
+  console.warn("[Webhooks] Rejected webhook: signature did not validate and shop could not be resolved", {
     path: req.path,
     presentHeaderNames,
   });

@@ -156,7 +156,16 @@ export const createApp = () => {
       },
     }),
   );
-  app.use(express.urlencoded({ extended: true }));
+  app.use(
+    express.urlencoded({
+      extended: true,
+      verify: (req, _res, buf) => {
+        if (!(req as Request & { rawBody?: Buffer }).rawBody) {
+          (req as Request & { rawBody?: Buffer }).rawBody = buf;
+        }
+      },
+    }),
+  );
   app.use(morgan("dev"));
 
   // Health check - no auth required. Runs a trivial query so a container
