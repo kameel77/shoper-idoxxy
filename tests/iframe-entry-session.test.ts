@@ -371,9 +371,8 @@ describe("GET /settings - signature-verified iframe entry", () => {
     expect(configRes.status).toBe(401);
   });
 
-  it("a valid signature with no shoper_license mapping leaves the reauthorize path intact (no session)", async () => {
-    // No shop_connections row at all for this license - simulates a shop
-    // installed before this feature existed.
+  it("a valid signature with no prior shoper_license mapping auto-provisions connection and establishes session", async () => {
+    // No shop_connections row initially - simulates a fresh shop/server entry
     const fields = {
       adminId: "admin-1",
       adminName: "Test Admin",
@@ -394,13 +393,11 @@ describe("GET /settings - signature-verified iframe entry", () => {
         "admin-hash": adminHash,
       }),
     );
-    // The page still serves fine - the frontend's own reauthorize flow
-    // (public/settings.html) takes over once it sees a 401 from /settings/config.
     expect(res.status).toBe(200);
 
     const configRes = await agent.json("/settings/config");
-    expect(configRes.status).toBe(401);
-    expect(configRes.body.ok).toBe(false);
+    expect(configRes.status).toBe(200);
+    expect(configRes.body).toBeDefined();
   });
 
   it("skips the iframe-entry path entirely (never establishes a session) when SHOPER_APPSTORE_SECRET is unset", async () => {

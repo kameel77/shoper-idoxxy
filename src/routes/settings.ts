@@ -302,7 +302,43 @@ settingsRouter.get("/", async (req: Request, res: Response) => {
     const verification = verifyIframeEntrySignature(req.query as Record<string, unknown>, env.SHOPER_APPSTORE_SECRET);
     if (verification.valid) {
       if (!req.session?.shopId) {
-        const resolvedShopId = shopConnectionService.getShopIdByLicense(verification.shop);
+        let resolvedShopId = shopConnectionService.getShopIdByLicense(verification.shop);
+        if (!resolvedShopId) {
+          // If no connection has this license recorded yet (e.g. fresh install opened via Shoper panel),
+          // auto-provision the connection for this HMAC-verified shop license.
+          const queryShopUrl = (req.query.shop_url || req.query.shopUrl)?.toString();
+          let resolvedShopUrl: string | undefined;
+          let candidateId: string | undefined;
+
+          if (queryShopUrl) {
+            const cleanHost = queryShopUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
+            if (cleanHost) {
+              candidateId = cleanHost.match(/(\d+)/)?.[1] || cleanHost.split(".")[0];
+              resolvedShopUrl = `https://${cleanHost}`;
+            }
+          }
+
+          if (!resolvedShopUrl) {
+            const referer = req.headers.referer || req.headers.origin;
+            if (referer && typeof referer === "string") {
+              try {
+                const url = new URL(referer);
+                const host = url.hostname;
+                if (host) {
+                  candidateId = host.match(/(\d+)/)?.[1] || host.split(".")[0];
+                  resolvedShopUrl = `https://${host}`;
+                }
+              } catch {
+                // ignore parse error
+              }
+            }
+          }
+
+          resolvedShopId = candidateId || verification.shop;
+          shopConnectionService.registerInstallation(resolvedShopId, resolvedShopUrl);
+          shopConnectionService.recordShoperLicense(resolvedShopId, verification.shop);
+        }
+
         if (resolvedShopId) {
           try {
             await establishShopSession(req, resolvedShopId);
@@ -318,8 +354,6 @@ settingsRouter.get("/", async (req: Request, res: Response) => {
             console.error("[ShopSession] Failed to establish session from verified iframe entry", error);
           }
         }
-        // No mapping found for this license yet: fall through to current
-        // behavior so the merchant still gets the reauthorize path.
       } else {
         // A session already exists (e.g. from the install branch above, or a
         // pre-existing cookie) - opportunistically backfill the license
