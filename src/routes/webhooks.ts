@@ -244,7 +244,7 @@ const extractCustomerFromOrder = (payload: z.infer<typeof orderCreatedSchema>): 
 // scheme actually matched is logged once per process (not per request) -
 // that's the diagnostic that tells us, from the owner's dev shop, which one
 // Shoper really sends.
-type WebhookSignatureScheme = "documented-sha1" | "hmac-sha256-fallback";
+type WebhookSignatureScheme = string;
 const loggedSignatureSchemes = new Set<WebhookSignatureScheme>();
 
 const logSignatureSchemeOnce = (scheme: WebhookSignatureScheme): void => {
@@ -438,7 +438,7 @@ webhooksRouter.post(
 
       const logDetails = {
         groupsAssigned: groupIds,
-        sourceUsed: resolution?.source ?? "none",
+        sourceUsed: resolution?.source,
         groupsRemoved: undefined as string[] | undefined,
         mappingUsed: resolution?.mapping?.name,
         error: undefined as string | undefined,
@@ -463,7 +463,7 @@ webhooksRouter.post(
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const errorLogDetails = {
         error: errorMessage,
-        sourceUsed: resolution?.source ?? "none",
+        sourceUsed: resolution?.source,
         groupsAssigned: undefined as string[] | undefined,
         groupsRemoved: undefined as string[] | undefined,
         mappingUsed: resolution?.mapping?.name,
@@ -641,7 +641,7 @@ webhooksRouter.post(
 
       const logDetails = {
         groupsAssigned: groupIds,
-        sourceUsed: resolution?.source ?? "none",
+        sourceUsed: resolution?.source,
         groupsRemoved: undefined as string[] | undefined,
         mappingUsed: resolution?.mapping?.name,
         error: undefined as string | undefined,
@@ -666,7 +666,7 @@ webhooksRouter.post(
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const errorLogDetails = {
         error: errorMessage,
-        sourceUsed: resolution?.source ?? "none",
+        sourceUsed: resolution?.source,
         groupsAssigned: undefined as string[] | undefined,
         groupsRemoved: undefined as string[] | undefined,
         mappingUsed: resolution?.mapping?.name,
