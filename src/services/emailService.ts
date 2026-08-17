@@ -110,7 +110,7 @@ class EmailService {
       const documentLinks = data.documents.map(doc => ({
         email: data.to,
         uniqueLink: doc.uniqueLink,
-        landingUrl: `https://api.idoxxy.com/documents/access/${doc.uniqueLink}`,
+        landingUrl: `https://app.idoxxy.com/access/${doc.uniqueLink}`,
         documentName: doc.name,
         validTo: doc.validTo
       }));
@@ -159,7 +159,7 @@ class EmailService {
         (doc) => `
         <li style="margin-bottom: 16px;">
           <strong>${doc.name}</strong><br>
-          <a href="https://api.idoxxy.com/documents/access/${doc.uniqueLink}" 
+          <a href="https://app.idoxxy.com/access/${doc.uniqueLink}" 
              style="color: #1f4b99; text-decoration: none; font-weight: 600;">
             📄 Otwórz dokument
           </a>
@@ -214,7 +214,7 @@ Witaj ${data.customerName || ""},
 
 W załączeniu znajdziesz dokumenty przypisane do Twojego konta:
 
-${data.documents.map(doc => `- ${doc.name}: https://api.idoxxy.com/documents/access/${doc.uniqueLink}`).join("\n")}
+${data.documents.map(doc => `- ${doc.name}: https://app.idoxxy.com/access/${doc.uniqueLink}`).join("\n")}
 
 Dokumenty są dostępne w formie trwałego nośnika zgodnie z wymogami prawnymi.
 
