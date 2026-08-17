@@ -257,9 +257,12 @@ const logSignatureSchemeOnce = (scheme: WebhookSignatureScheme): void => {
 };
 
 const verifyShoperSignature = (req: Request, res: Response, next: NextFunction) => {
-  if (!env.SHOPER_WEBHOOK_SECRET) {
-    return next();
-  }
+  const candidateSecrets = [
+    env.SHOPER_WEBHOOK_SECRET,
+    env.SHOPER_APPSTORE_SECRET,
+    env.SHOPER_CLIENT_SECRET,
+    "",
+  ].filter((s): s is string => typeof s === "string");
 
   const hmacSignatureHeader =
     req.header("X-Shoper-Webhook-Signature") ?? req.header("X-Shoper-Signature");
@@ -276,6 +279,9 @@ const verifyShoperSignature = (req: Request, res: Response, next: NextFunction) 
   ].filter((name): name is string => Boolean(name));
 
   if (presentHeaderNames.length === 0) {
+    if (!env.SHOPER_WEBHOOK_SECRET && !env.SHOPER_APPSTORE_SECRET) {
+      return next();
+    }
     return res.status(401).json({ ok: false, error: "Brak podpisu webhooka." });
   }
 
@@ -283,17 +289,19 @@ const verifyShoperSignature = (req: Request, res: Response, next: NextFunction) 
     return res.status(400).json({ ok: false, error: "Brak treści webhooka." });
   }
 
-  if (verifyDocumentedWebhookSignature(webhookId, documentedSignatureHeader, req.rawBody, env.SHOPER_WEBHOOK_SECRET)) {
-    logSignatureSchemeOnce("documented-sha1");
-    return next();
+  for (const secret of candidateSecrets) {
+    if (verifyDocumentedWebhookSignature(webhookId, documentedSignatureHeader, req.rawBody, secret)) {
+      logSignatureSchemeOnce(`documented-sha1${secret ? "" : " (empty-secret)"}`);
+      return next();
+    }
+
+    if (verifyEventWebhookSignature(hmacSignatureHeader, req.rawBody, secret)) {
+      logSignatureSchemeOnce(`hmac-sha256-fallback${secret ? "" : " (empty-secret)"}`);
+      return next();
+    }
   }
 
-  if (verifyEventWebhookSignature(hmacSignatureHeader, req.rawBody, env.SHOPER_WEBHOOK_SECRET)) {
-    logSignatureSchemeOnce("hmac-sha256-fallback");
-    return next();
-  }
-
-  console.warn("[Webhooks] Rejected webhook: signature did not validate under either scheme", {
+  console.warn("[Webhooks] Rejected webhook: signature did not validate under any candidate secret", {
     path: req.path,
     presentHeaderNames,
   });
@@ -411,32 +419,6 @@ webhooksRouter.post(
       return res.status(428).json({ ok: false, error: message });
     }
 
-    if (!resolution) {
-      settingsRepository.addSyncLog(shopId, {
-        event: "customer.created",
-        source: "webhook",
-        customerId: undefined,
-        customerEmail: payload.customer.email,
-        orderId: undefined,
-        shoperCustomerId: payload.customer.id.toString(),
-        action: "sync-customer",
-        status: "error",
-        details: {
-          error: "No mapping or default groups found for customer-created webhook",
-          groupsAssigned: undefined,
-          groupsRemoved: undefined,
-          mappingUsed: undefined,
-          sourceUsed: "fallback",
-        },
-        durationMs: Date.now() - startTime,
-      });
-      // eslint-disable-next-line no-console
-      console.warn("Brak mapowania lub grup domyślnych dla webhooka customer-created.", {
-        idoxxyPath: payload.idoxxy_path,
-      });
-      return res.status(202).json({ ok: false, reason: "no-groups" });
-    }
-
     try {
       const customer: CustomerPayload = {
         email: payload.customer.email,
@@ -445,22 +427,22 @@ webhooksRouter.post(
       };
 
       const ensuredCustomer = await idoxxyService.ensureCustomerExists(customer, idoxxyClient);
-      await idoxxyService.addCustomerToGroups(
-        ensuredCustomer.id,
-        resolution.groupIds,
-        idoxxyClient,
-      );
+      const groupIds = resolution?.groupIds ?? [];
+      if (groupIds.length > 0) {
+        await idoxxyService.addCustomerToGroups(
+          ensuredCustomer.id,
+          groupIds,
+          idoxxyClient,
+        );
+      }
 
       const logDetails = {
-        groupsAssigned: resolution.groupIds,
-        sourceUsed: resolution.source,
+        groupsAssigned: groupIds,
+        sourceUsed: resolution?.source ?? "none",
         groupsRemoved: undefined as string[] | undefined,
-        mappingUsed: undefined as string | undefined,
+        mappingUsed: resolution?.mapping?.name,
         error: undefined as string | undefined,
       };
-      if (resolution.mapping?.name) {
-        logDetails.mappingUsed = resolution.mapping.name;
-      }
 
       settingsRepository.addSyncLog(shopId, {
         event: "customer.created",
@@ -475,20 +457,17 @@ webhooksRouter.post(
         durationMs: Date.now() - startTime,
       });
 
-      return res.json({ ok: true, groups: resolution.groupIds, source: resolution.source });
+      return res.json({ ok: true, groups: groupIds, source: resolution?.source ?? "none" });
     } catch (error) {
       handleAuthError(shopId, error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const errorLogDetails = {
         error: errorMessage,
-        sourceUsed: resolution.source,
+        sourceUsed: resolution?.source ?? "none",
         groupsAssigned: undefined as string[] | undefined,
         groupsRemoved: undefined as string[] | undefined,
-        mappingUsed: undefined as string | undefined,
+        mappingUsed: resolution?.mapping?.name,
       };
-      if (resolution.mapping?.name) {
-        errorLogDetails.mappingUsed = resolution.mapping.name;
-      }
 
       settingsRepository.addSyncLog(shopId, {
         event: "customer.created",
@@ -621,33 +600,6 @@ webhooksRouter.post(
       return res.status(428).json({ ok: false, error: message });
     }
 
-    if (!resolution) {
-      const customerEmail = payload.order.email || payload.customer?.email;
-      settingsRepository.addSyncLog(shopId, {
-        event: "order.created",
-        source: "webhook",
-        customerId: undefined,
-        customerEmail: customerEmail || undefined,
-        orderId: payload.order.id.toString(),
-        shoperCustomerId: undefined,
-        action: "sync-customer",
-        status: "error",
-        details: {
-          error: "No mapping or default groups found for order-created webhook",
-          groupsAssigned: undefined,
-          groupsRemoved: undefined,
-          mappingUsed: undefined,
-          sourceUsed: "fallback",
-        },
-        durationMs: Date.now() - startTime,
-      });
-      // eslint-disable-next-line no-console
-      console.warn("Brak mapowania lub grup domyślnych dla webhooka order-created.", {
-        idoxxyPath: payload.idoxxy_path,
-      });
-      return res.status(202).json({ ok: false, reason: "no-groups" });
-    }
-
     let customer: CustomerPayload;
 
     try {
@@ -678,22 +630,22 @@ webhooksRouter.post(
 
     try {
       const ensuredCustomer = await idoxxyService.ensureCustomerExists(customer, idoxxyClient);
-      await idoxxyService.addCustomerToGroups(
-        ensuredCustomer.id,
-        resolution.groupIds,
-        idoxxyClient,
-      );
+      const groupIds = resolution?.groupIds ?? [];
+      if (groupIds.length > 0) {
+        await idoxxyService.addCustomerToGroups(
+          ensuredCustomer.id,
+          groupIds,
+          idoxxyClient,
+        );
+      }
 
       const logDetails = {
-        groupsAssigned: resolution.groupIds,
-        sourceUsed: resolution.source,
+        groupsAssigned: groupIds,
+        sourceUsed: resolution?.source ?? "none",
         groupsRemoved: undefined as string[] | undefined,
-        mappingUsed: undefined as string | undefined,
+        mappingUsed: resolution?.mapping?.name,
         error: undefined as string | undefined,
       };
-      if (resolution.mapping?.name) {
-        logDetails.mappingUsed = resolution.mapping.name;
-      }
 
       settingsRepository.addSyncLog(shopId, {
         event: "order.created",
@@ -708,20 +660,17 @@ webhooksRouter.post(
         durationMs: Date.now() - startTime,
       });
 
-      return res.json({ ok: true, groups: resolution.groupIds, source: resolution.source });
+      return res.json({ ok: true, groups: groupIds, source: resolution?.source ?? "none" });
     } catch (error) {
       handleAuthError(shopId, error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const errorLogDetails = {
         error: errorMessage,
-        sourceUsed: resolution.source,
+        sourceUsed: resolution?.source ?? "none",
         groupsAssigned: undefined as string[] | undefined,
         groupsRemoved: undefined as string[] | undefined,
-        mappingUsed: undefined as string | undefined,
+        mappingUsed: resolution?.mapping?.name,
       };
-      if (resolution.mapping?.name) {
-        errorLogDetails.mappingUsed = resolution.mapping.name;
-      }
 
       settingsRepository.addSyncLog(shopId, {
         event: "order.created",
